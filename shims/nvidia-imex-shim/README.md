@@ -1,12 +1,7 @@
 # nvidia-imex-shim
 
-`execve` wrapper staged by the node agent beside the real IMEX daemon in
-Mokka's node-local driver tree.
+由节点代理在 Mokka 节点本地驱动目录里、紧挨真正的 IMEX daemon 放置的一个 `execve` 包装器。
 
-The upstream daemon hard-codes `nvidia-imex -c /imexd/imexd.cfg` with no flag passthrough,
-so `--nogpu` cannot be injected from outside. This shim resolves
-`nvidia-imex.real` beside its own executable and appends `--nogpu`, preserving
-all caller arguments, environment, and stdio. The `exec` replaces the shim
-process — no wrapper lingers, signals reach the daemon directly.
+上游 daemon 把 `nvidia-imex -c /imexd/imexd.cfg` 写死，没有任何命令行透传，因此 `--nogpu` 无法从外部注入。这个垫片会找到与自己同目录的 `nvidia-imex.real`，并在其后追加 `--nogpu`，同时保留调用方的全部参数、环境变量和 stdio。这次 `exec` 会直接替换垫片进程——没有残留的包装进程，信号也能直达 daemon。
 
-Remove once upstream supports flag passthrough. See NVIDIA/k8s-test-infra#304.
+一旦上游支持命令行透传即可移除。见 NVIDIA/k8s-test-infra#304。

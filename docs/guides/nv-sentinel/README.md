@@ -3,127 +3,81 @@ Copyright 2026 NVIDIA CORPORATION
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# NVSentinel thermal-margin detection + remediation demo
+# NVSentinel 温度余量检测与自动恢复演示
 
-This demo proves that [NVSentinel](https://github.com/NVIDIA/nvsentinel) — NVIDIA's
-open-source GPU health monitoring and fault-remediation service — can **detect** a
-GPU thermal condition, **remediate** the affected node (cordon + drain), and
-**auto-recover** it (uncordon) once the GPU cools down, all on a local Kind cluster
-with **no physical GPUs**. The GPUs are simulated by `nvml-mock`.
+这个演示要证明：[NVSentinel](https://github.com/NVIDIA/nvsentinel)（NVIDIA 开源的 GPU 健康监控与故障修复服务）能够**发现** GPU 温度异常、**修复**受影响的节点（cordon + drain），并在 GPU 降温后**自动恢复**该节点（uncordon）。整个过程跑在本地 Kind 集群上，**没有任何物理 GPU**，GPU 由 `nvml-mock` 模拟。
 
-The fault under test is a **thermal-margin violation**. NVSentinel's
-`GpuThermalMarginWatch` compares each GPU's live *signed* T.Limit margin
-(DCGM field 153) against the per-GPU **hardware slowdown offset**. That offset is
-not a DCGM field: the NVSentinel `metadata-collector` reads it once from NVML
-field 194 (`NVML_FI_DEV_TEMPERATURE_SLOWDOWN_TLIMIT`) and publishes it to
-`gpu_metadata.json`. When the margin drops below the offset the GPU is unhealthy;
-when it rises back the check clears.
+演示注入的故障是**温度余量越界**。NVSentinel 的 `GpuThermalMarginWatch` 会把每块 GPU 实时的**带符号** T.Limit 余量（DCGM 字段 153）与该 GPU 的**硬件降速偏移值**作比较。这个偏移不是 DCGM 字段：NVSentinel 的 `metadata-collector` 会从 NVML 字段 194（`NVML_FI_DEV_TEMPERATURE_SLOWDOWN_TLIMIT`）读取一次，写进 `gpu_metadata.json`。余量低于偏移值时 GPU 被判为不健康；回升之后检查就会解除。
 
 ```
-nvml-mock (fake libnvidia-ml.so)
-   │  GPU pinned hot → T.Limit margin (field 153) goes negative
-   │  slowdown offset (NVML field 194) → metadata-collector → gpu_metadata.json
+nvml-mock（模拟的 libnvidia-ml.so）
+   │  把 GPU 固定在高温 → T.Limit 余量（字段 153）变负
+   │  slowdown offset（NVML 字段 194）→ metadata-collector → gpu_metadata.json
    ▼
-GPU Operator standalone DCGM (nv-hostengine :5555)
+GPU Operator 独立 DCGM（nv-hostengine :5555）
    ▼
-NVSentinel GPU Health Monitor  ──►  platform-connector  ──►  MongoDB (change streams)
+NVSentinel GPU Health Monitor  ──►  platform-connector  ──►  MongoDB（change streams）
    (GpuThermalMarginWatch)                                    │
-                                          fault-quarantine ◄──┘  (cordon)
+                                          fault-quarantine ◄──┘  （cordon）
                                                   │
-                                          node-drainer            (drain → workload reschedules)
+                                          node-drainer            （drain → 工作负载重新调度）
 ```
 
-On **cooldown**, DCGM field 153 is a *live gauge*: the next health-monitor poll
-sees the margin re-open above the slowdown offset, the monitor emits healthy
-events, and `fault-quarantine` **uncordons** the node — **no DCGM restart needed**
-(unlike latched XID/ECC faults, which stay latched until the hostengine is
-restarted).
+**降温时**，DCGM 字段 153 是一个实时读数：下一次健康轮询就会看到余量重新超过降速偏移值，监控随即发出「恢复健康」事件，`fault-quarantine` 便 **uncordon** 该节点——**不需要重启 DCGM**（这一点与会一直锁存、必须重启 hostengine 才清除的 XID/ECC 故障不同）。
 
-## Topology
+## 拓扑
 
-One control-plane + two workers:
+1 个 control-plane + 2 个 worker：
 
-- **Workers** (`nvml-mock-gpu=true`): run the `nvml-mock` DaemonSet and all GPU
-  Operator operands (DCGM, device plugin, GFD). Each advertises the profile's
-  mock GPUs, 8 with the default `h100`.
-- **Control-plane**: runs the NVSentinel control-plane pipeline (MongoDB,
-  platform-connector, fault-quarantine, node-drainer). Pinning it there means
-  draining a *GPU worker* never evicts the pipeline doing the draining.
+- **Worker**（带 `nvml-mock-gpu=true`）：运行 `nvml-mock` DaemonSet 和 GPU Operator 的全部子组件（DCGM、device plugin、GFD）。每个节点按配置档对外声明模拟 GPU，默认 `h100` 是 8 块。
+- **Control-plane**：运行 NVSentinel 的控制面流水线（MongoDB、platform-connector、fault-quarantine、node-drainer）。把它固定在这里，是为了让「驱逐某个 GPU worker」时，不会顺带把正在执行驱逐的流水线也一起赶走。
 
-When one worker's GPU overheats, NVSentinel cordons/drains it and the sample GPU
-workload reschedules onto the second, healthy worker.
+当一台 worker 的 GPU 过热时，NVSentinel 会 cordon/drain 它，示例 GPU 工作负载则重新调度到另一台健康的 worker 上。
 
-## Prerequisites
+## 前置条件
 
-> **This demo creates its own Kind cluster.** It pins a two-worker topology and
-> specific node labels, so it provisions its own cluster rather than using your
-> current `KUBECONFIG` context, and it will not touch it.
+> **本演示会创建自己的 Kind 集群。** 它依赖固定的双 worker 拓扑和特定节点标签，因此会新建一个专属集群，而不会使用你当前的 `KUBECONFIG` context，也不会改动它。
 
-- [Docker](https://docs.docker.com/get-started/get-docker/), with the daemon running.
-- [Kind](https://kind.sigs.k8s.io/), to provision the demo's dedicated cluster.
-- [Helm 3.8 or newer](https://helm.sh/docs/intro/install/) — this demo installs
-  NVSentinel from `oci://ghcr.io/nvidia/nvsentinel`, and OCI registry support is
-  what needs 3.8.
-- [kubectl](https://kubernetes.io/docs/reference/kubectl/).
-- `jq` (optional, only used to pretty-print node conditions).
-- Network access to `ghcr.io` (NVSentinel chart), `helm.ngc.nvidia.com`
-  (GPU Operator) and `docker.io` (Percona images).
-- An `arm64` or `amd64` host. The demo deploys NVSentinel's MongoDB through the
-  Percona operator instead of the default Bitnami store, so it works on Apple
-  Silicon too (see below).
+- [Docker](https://docs.docker.com/get-started/get-docker/)，且守护进程正在运行。
+- [Kind](https://kind.sigs.k8s.io/)，用于创建演示专属集群。
+- [Helm 3.8 或更高版本](https://helm.sh/docs/intro/install/)——演示从 `oci://ghcr.io/nvidia/nvsentinel` 安装 NVSentinel，而对 OCI 仓库的支持正是 3.8 才有的。
+- [kubectl](https://kubernetes.io/docs/reference/kubectl/)。
+- `jq`（可选，只用来美化输出节点 condition）。
+- 能访问 `ghcr.io`（NVSentinel chart）、`helm.ngc.nvidia.com`（GPU Operator）和 `docker.io`（Percona 镜像）。
+- `arm64` 或 `amd64` 主机。演示通过 Percona operator 部署 NVSentinel 的 MongoDB，而不是默认的 Bitnami store，因此 Apple Silicon 上也能跑（原因见下文）。
 
-New to Mokka? The [quick start](../../quickstart.md) is the fastest way to see
-simulated GPUs before running this demo.
+第一次接触 Mokka？先跑一遍[快速入门](../../quickstart.md)看看模拟 GPU 是什么样，再来做这个演示会更快上手。
 
-Takes about 30 minutes, and appreciably longer on a cold image cache —
-the GPU Operator, cert-manager and NVSentinel are all pulled.
+全程约 30 分钟；如果本地镜像缓存是空的会更久，因为 GPU Operator、cert-manager 和 NVSentinel 都要拉取。
 
-## Run it
+!!! note "国内镜像拉取"
+    本演示会安装 NVSentinel（`ghcr.io`）、GPU Operator（`helm.ngc.nvidia.com` / `nvcr.io`）和 Percona（`docker.io`）的镜像。若这些镜像源拉取缓慢或超时，可给相关 chart 的镜像加私有仓库前缀（如给 GPU Operator 的各镜像加 `harbor.heilansc.com/nvcr.io` 前缀）。具体做法与示例见[国内镜像加速](../README.md#domestic-mirror)。
+
+## 运行
 
 ```bash
 cd docs/guides/nv-sentinel
 ./run.sh
 ```
 
-The script is idempotent and reuses the cluster; set `FORCE_RECREATE=true` to
-rebuild from scratch. Useful overrides: `GPU_PROFILE`, `HOT_TEMP_C`, `TARGET_GPU`,
-`NVSENTINEL_VERSION`, `GPU_OPERATOR_VERSION`, `CERT_MANAGER_VERSION`.
+脚本是幂等的，会复用集群；需要从头重建时设置 `FORCE_RECREATE=true`。常用覆盖项：`GPU_PROFILE`、`HOT_TEMP_C`、`TARGET_GPU`、`NVSENTINEL_VERSION`、`GPU_OPERATOR_VERSION`、`CERT_MANAGER_VERSION`。
 
-## What the script does
+## 脚本会做什么
 
-1. **Cluster** — creates the Kind cluster from [`kind.yaml`](kind.yaml) and
-   labels both workers `nvml-mock-gpu=true`.
-2. **Mock GPUs** — builds/loads the `nvml-mock` image and installs the chart onto
-   the workers.
-3. **GPU Operator** — installs it with [`gpu-operator-values.yaml`](gpu-operator-values.yaml),
-   which disables the real driver/toolkit (the mock provides them) and **enables
-   the standalone DCGM** DaemonSet + Service that NVSentinel polls.
-4. **cert-manager** — installed as a TLS dependency (Percona and NVSentinel both
-   use it to issue MongoDB certificates).
-5. **NVSentinel** — applies the chart's Percona CRDs and waits until they are
-   served (Helm 4 does not wait for them on an install without `--wait`), then
-   installs the chart with [`nvsentinel-values.yaml`](nvsentinel-values.yaml),
-   which brings up the MongoDB store via the Percona operator and wires the
-   pipeline to the standalone DCGM. This enables the `metadata-collector` (for the
-   slowdown offset) and turns the thermal-margin watch from dry-run into an active,
-   remediating check.
-6. **Sample workload** — [`sample-workload.yaml`](sample-workload.yaml), a pod that
-   requests one `nvidia.com/gpu` so the drainer has something to evict.
-7. **Phase 1 — detect + remediate** — pins one worker's GPU to a hot temperature
-   (`HOT_TEMP_C`, default 142 °C) and waits for NVSentinel to cordon it; the sample
-   workload reschedules to the other worker.
-8. **Phase 2 — auto-recover** — clears the temperature override and waits for
-   NVSentinel to uncordon the node. No DCGM restart is involved.
+1. **集群** — 用 [`kind.yaml`](kind.yaml) 创建 Kind 集群，并给两个 worker 都打上 `nvml-mock-gpu=true`。
+2. **模拟 GPU** — 构建/加载 `nvml-mock` 镜像，把 chart 装到 worker 上。
+3. **GPU Operator** — 用 [`gpu-operator-values.yaml`](gpu-operator-values.yaml) 安装：关掉真实 driver/toolkit（模拟层已经提供了），并**启用独立的 DCGM** DaemonSet + Service，供 NVSentinel 轮询。
+4. **cert-manager** — 作为 TLS 依赖安装（Percona 和 NVSentinel 都靠它签发 MongoDB 证书）。
+5. **NVSentinel** — 先应用 chart 的 Percona CRD 并等它们真正可用（Helm 4 在没加 `--wait` 的安装里不会等 CRD），再用 [`nvsentinel-values.yaml`](nvsentinel-values.yaml) 安装 chart：通过 Percona operator 拉起 MongoDB store，并把流水线接到独立 DCGM 上。这一步会启用 `metadata-collector`（用于提供降速偏移值），同时把温度余量检查从 dry-run 切换成真正会执行修复的动作。
+6. **示例工作负载** — [`sample-workload.yaml`](sample-workload.yaml)，一个申请 1 块 `nvidia.com/gpu` 的 Pod，好让 drainer 有东西可以驱逐。
+7. **阶段 1 — 检测 + 修复** — 把某台 worker 的 GPU 固定在高温（`HOT_TEMP_C`，默认 142 °C），等待 NVSentinel 把它 cordon；示例工作负载会重新调度到另一台 worker。
+8. **阶段 2 — 自动恢复** — 清掉温度覆盖值，等待 NVSentinel 把节点 uncordon。整个过程不涉及重启 DCGM。
 
-The script exits non-zero at the first step that does not happen: the sample
-workload not starting, a worker cordoned before the heat, no cordon, no
-reschedule, or no uncordon. It then prints each worker's cordon state and the
-NVSentinel checks failing on it, and cools the GPU if it is still hot, so a
-re-run starts from a healthy node.
+只要有一步没按预期发生，脚本就会以非零状态退出：示例工作负载没起来、加热前 worker 就已被 cordon、没有 cordon、没有重新调度、或者没有 uncordon。退出前它会打印每台 worker 的 cordon 状态、以及其上未通过的 NVSentinel 检查项；如果 GPU 还是烫的，也会顺手降温，这样重跑时节点是健康的。
 
-## The fault and the recovery
+## 故障与恢复过程
 
-Heat the GPU (done by the script):
+给 GPU 加热（脚本会做这一步）：
 
 ```bash
 MOCK=$(kubectl --context kind-nvml-mock-nvsentinel -n mokka \
@@ -132,100 +86,46 @@ kubectl --context kind-nvml-mock-nvsentinel -n mokka exec "$MOCK" -- \
   nvml-mock-ctl temp --gpu 0 142
 ```
 
-Pinning the GPU above its profile's slowdown threshold (87 °C on h100, 90 °C on
-gb300) drives the T.Limit margin (DCGM field 153) negative. Because the margin is
-then below the GPU's slowdown offset (`0 °C` for the mock, read from NVML field
-194), the GPU Health Monitor's `GpuThermalMarginWatch` fails with
-`GPU_TEMP_HW_SLOWDOWN_VIOLATION`, producing a node condition such as:
+把温度固定在配置档的降速阈值之上（`h100` 是 87 °C，`gb300` 是 90 °C），会让 T.Limit 余量（DCGM 字段 153）变成负数。此时余量低于该 GPU 的降速偏移值（模拟层为 `0 °C`，来自 NVML 字段 194），GPU Health Monitor 的 `GpuThermalMarginWatch` 便以 `GPU_TEMP_HW_SLOWDOWN_VIOLATION` 失败，并产生类似这样的节点 condition：
 
 ```
 GpuThermalMarginWatch=True: GPU 0 thermal margin -3°C below HW slowdown T.Limit (slowdown=0°C)
 ```
 
-The comparison is strict, so pinning *exactly* at the threshold leaves a margin of
-`0 °C` and the watch stays healthy — the temperature has to clear it.
+这个比较是**严格小于**，所以温度恰好压在阈值上时效余量是 `0 °C`，检查仍算健康——必须超过阈值才会触发。
 
-`fault-quarantine` cordons the node → `node-drainer` drains it.
+随后 `fault-quarantine` 把节点 cordon，`node-drainer` 再把它 drain。
 
-Cool the GPU (also done by the script):
+给 GPU 降温（同样由脚本完成）：
 
 ```bash
 kubectl --context kind-nvml-mock-nvsentinel -n mokka exec "$MOCK" -- \
   nvml-mock-ctl reset --gpu 0
 ```
 
-Field 153 is a live gauge, so the next health-monitor poll sees a healthy
-(positive) margin and `fault-quarantine` uncordons the node. **No DCGM restart is
-needed** — that is the key difference from a latched XID/ECC fault.
+字段 153 是实时读数，所以下一次健康轮询就会看到余量恢复为正，`fault-quarantine` 随即 uncordon 节点。**不需要重启 DCGM**——这正是它与会锁存的 XID/ECC 故障最关键的区别。
 
-> **Mock capability note.** This flow relies on two `nvml-mock` behaviors added
-> for it: the mock exposes the T.Limit threshold field values
-> (`NVML_FI_DEV_TEMPERATURE_*_TLIMIT`, ids 193–196) so the metadata-collector can
-> read the slowdown offset, and its `nvmlDeviceGetMarginTemperature` returns a
-> *signed* margin that goes negative past the slowdown limit (rather than clamping
-> at 0) so the watch can actually trip.
+> **关于模拟层能力的说明。** 这条链路依赖专为它新增的两个 `nvml-mock` 行为：一是模拟层会公开 T.Limit 阈值类字段（`NVML_FI_DEV_TEMPERATURE_*_TLIMIT`，id 193–196），好让 metadata-collector 读到降速偏移值；二是 `nvmlDeviceGetMarginTemperature` 返回的是**带符号**余量，超过降速阈值后会变成负数（而不是被截断在 0），这样检查才真的能触发。
 
-## Why these config choices matter
+## 为什么这些配置不能改
 
-Beyond the datastore choice, `nvsentinel-values.yaml` sets a handful of non-default
-options that are essential for the demo to complete cleanly (all documented inline in
-that file):
+除了数据存储方案之外，`nvsentinel-values.yaml` 还设了几项非默认值，它们对演示能否完整跑通至关重要（该文件里也都有行内注释说明）：
 
-- **`global.metadataCollector.enabled: true`**. The `metadata-collector` DaemonSet
-  reads each GPU's slowdown T.Limit offset (NVML field 194) once and writes it to
-  `gpu_metadata.json`. Without it, `GpuThermalMarginWatch` never arms and logs
-  *"missing slowdown TLIMIT threshold metadata"*. It is off by default.
-- **`labeler.assumeDriverInstalled: true`**. The metadata-collector only schedules
-  on nodes labeled `nvsentinel.dgxc.nvidia.com/driver.installed=true`, which the
-  labeler normally sets only when it sees a real `nvidia-driver-daemonset`. This
-  demo disables the real driver (the mock provides `libnvidia-ml.so`), so we tell
-  the labeler to assume the driver is present on every `gpu.present` node — the
-  same knob NVIDIA documents for hosts with pre-baked drivers.
-- **`gpu-health-monitor.dcgmFieldsMonitoring.gpuTempLimitStoreOnly: false`**.
-  `GpuThermalMarginWatch` ships in **dry-run** (store-only) mode: it emits events
-  but never touches the node. Turning store-only off lets a closing thermal margin
-  actually drive the cordon/drain pipeline (and the uncordon on recovery).
-- **`gpu-health-monitor.dcgmHealthCheck.suppressedErrorCodes`** includes
-  `DCGM_FR_NVLINK_EFFECTIVE_BER_THRESHOLD`. The mock reports an NVLink effective-BER
-  threshold breach on every GPU at boot — a mock-data artifact, not the fault under
-  test. Left active it stays a "failing check" forever and keeps the node quarantined
-  even after the GPU cools, so recovery never completes. Suppressing it lets all
-  checks clear on cooldown.
-- **`suppressedErrorCodes`** also includes `DCGM_FR_IMEX_UNHEALTHY`. On a board
-  whose NVLink domain spans nodes, such as `gb300`, Mokka stages the IMEX tools,
-  so DCGM's health check runs `nvidia-imex-ctl -q`. The demo runs no IMEX
-  daemon, so the query fails, DCGM reports `IMEX daemon status is -3 (not READY)`,
-  and NVSentinel cordons both workers before any GPU is heated. The default
-  `h100` has no `nvidia-imex-ctl`, which DCGM treats as healthy. A real
-  multi-node NVLink cluster runs the IMEX daemon and should keep this check.
-- **`fault-quarantine.circuitBreaker.enabled: false`**. The circuit breaker trips
-  when ≥ 50% of GPU nodes are cordoned within a 5-minute window and then halts *all*
-  event processing (including the uncordon on recovery). With only two GPU workers a
-  single legitimate cordon already meets that threshold, so it is disabled for this
-  tiny cluster. **Leave it enabled (the default) on real, larger clusters.**
-- **`node-drainer.userNamespaces[*].mode: Immediate`**. The default `AllowCompletion`
-  mode waits for each pod to finish gracefully; the sample GPU workload never
-  completes on its own, so it would never be evicted and you would not see it move to
-  the healthy worker. `Immediate` makes the drain → reschedule step observable. Real
-  clusters typically keep `AllowCompletion`.
+- **`global.metadataCollector.enabled: true`**。`metadata-collector` DaemonSet 会读取每块 GPU 的降速 T.Limit 偏移值（NVML 字段 194）一次，写入 `gpu_metadata.json`。没有它，`GpuThermalMarginWatch` 永远不会进入工作态，只会打印 *"missing slowdown TLIMIT threshold metadata"*。默认关闭。
+- **`labeler.assumeDriverInstalled: true`**。metadata-collector 只会调度到带 `nvsentinel.dgxc.nvidia.com/driver.installed=true` 标签的节点上，而 labeler 通常只在看到真实的 `nvidia-driver-daemonset` 时才打这个标签。本演示关掉了真实驱动（由模拟层提供 `libnvidia-ml.so`），所以要让 labeler 直接在每个 `gpu.present` 节点上假定驱动已就绪——这也是 NVIDIA 为预装驱动的主机提供的开关。
+- **`gpu-health-monitor.dcgmFieldsMonitoring.gpuTempLimitStoreOnly: false`**。`GpuThermalMarginWatch` 出厂时是 **dry-run**（仅存储）模式：只发事件，绝不动节点。关掉 store-only，收紧的温度余量才真正驱动 cordon/drain 流水线（以及恢复时的 uncordon）。
+- **`gpu-health-monitor.dcgmHealthCheck.suppressedErrorCodes`** 里加了 `DCGM_FR_NVLINK_EFFECTIVE_BER_THRESHOLD`。模拟层在启动时会给每块 GPU 都报一次 NVLink effective-BER 阈值越界，这是模拟数据带来的假象，不是本演示要测的故障。若放着不管，它会永远是一项「未通过的检查」，即便 GPU 降温，节点也一直被隔离，恢复永远完不成。屏蔽它，降温后所有检查才能全部通过。
+- **`suppressedErrorCodes`** 里还加了 `DCGM_FR_IMEX_UNHEALTHY`。在 NVLink 域跨节点的板子（例如 `gb300`）上，Mokka 会准备 IMEX 工具，于是 DCGM 的健康检查会去执行 `nvidia-imex-ctl -q`。演示里没有跑 IMEX daemon，查询失败，DCGM 报 `IMEX daemon status is -3 (not READY)`，NVSentinel 就会在还没加热任何 GPU 之前把两台 worker 都 cordon 掉。默认的 `h100` 没有 `nvidia-imex-ctl`，DCGM 视其为健康。真实的多节点 NVLink 集群会运行 IMEX daemon，应保留这项检查。
+- **`fault-quarantine.circuitBreaker.enabled: false`**。熔断器的规则是：5 分钟内被 cordon 的 GPU 节点达到 50% 就触发，随后**所有**事件处理都会停摆（包括恢复时的 uncordon）。这里只有两台 GPU worker，一次正常的 cordon 就已经达到阈值，所以在这个迷你集群里关掉它。**真实的大集群请保持默认开启。**
+- **`node-drainer.userNamespaces[*].mode: Immediate`**。默认的 `AllowCompletion` 会等每个 Pod 自行优雅结束；而示例 GPU 工作负载永远不会自己结束，于是永远不会被驱逐，你也就看不到它迁到健康 worker 上。改成 `Immediate` 才能观察到 drain → 重新调度这一步。真实集群一般仍用 `AllowCompletion`。
 
-## A note on host resources
+## 关于宿主机资源
 
-The demo runs GPU Operator + DCGM + MongoDB + the full NVSentinel pipeline. On a
-busy host — for example if you have several Kind clusters running at once — the GPU
-workers can be CPU-saturated during GPU Operator bring-up, which slows image pulls
-and pod readiness (cert-manager and DCGM in particular). `run.sh` uses generous
-waits, but if a step times out, re-running it (it reuses the cluster) or freeing up
-other clusters usually resolves it.
+演示要同时跑 GPU Operator + DCGM + MongoDB + 整套 NVSentinel 流水线。宿主机比较忙的时候（比如同时开着好几个 Kind 集群），GPU worker 在 GPU Operator 拉起期间可能被 CPU 打满，进而拖慢镜像拉取和 Pod 就绪（cert-manager 和 DCGM 尤其明显）。`run.sh` 已经给了很宽松的等待时间；如果某步还是超时，重跑一次（它会复用集群）或者腾掉其他集群通常就能解决。
 
-## Why the Percona MongoDB store
+## 为什么用 Percona MongoDB store
 
-NVSentinel's `mongodb-store` subchart defaults to the Bitnami MongoDB chart, whose
-images (`bitnamilegacy/*`) are published amd64-only and whose containers run
-Bitnami-only startup scripts. On arm64 that MongoDB cannot start. The subchart also
-ships a [Percona Server for MongoDB](https://docs.nvidia.com/nvsentinel/runbooks/mongo-db-bitnami-to-percona-migration/)
-path, and every image on it — `percona-server-mongodb`, the operator, and `mongosh` —
-is published for both `linux/amd64` and `linux/arm64`, so the demo selects it:
+NVSentinel 的 `mongodb-store` 子 chart 默认使用 Bitnami MongoDB chart，它的镜像（`bitnamilegacy/*`）只有 amd64 版本，容器里跑的也是 Bitnami 专属启动脚本，在 arm64 上根本起不来。该子 chart 另外提供了一条 [Percona Server for MongoDB](https://docs.nvidia.com/nvsentinel/runbooks/mongo-db-bitnami-to-percona-migration/) 路径，其涉及的每个镜像——`percona-server-mongodb`、operator、`mongosh`——都同时发布 `linux/amd64` 和 `linux/arm64` 版本，所以演示选了它：
 
 ```yaml
 mongodb-store:
@@ -233,26 +133,22 @@ mongodb-store:
   usePerconaOperator: true
 ```
 
-Both flags are required — they gate which chart dependencies Helm pulls in.
+两个开关都必须设，它们决定 Helm 会拉哪些 chart 依赖。
 
-The demo then trims the Percona defaults for a laptop-sized Kind cluster: a
-**single-member** replica set (`unsafeFlags.replsetSize: true`, since Percona
-otherwise insists on three) with smaller CPU/memory requests and no metrics
-sidecar. NVSentinel only needs change streams, which a one-member replica set
-provides.
+随后演示又按「笔记本能带动的 Kind 集群」把 Percona 默认配置削了一圈：改成**单成员**副本集（`unsafeFlags.replsetSize: true`，否则 Percona 坚持要三个）、调低 CPU/内存请求、去掉 metrics sidecar。NVSentinel 只需要 change streams，单成员副本集就能提供。
 
-## Inspecting the result
+## 查看结果
 
 ```bash
 CTX=kind-nvml-mock-nvsentinel
 kubectl --context $CTX get nodes
 kubectl --context $CTX -n nvsentinel get pods
-# cordon / quarantine / uncordon events:
+# cordon / quarantine / uncordon 相关事件：
 kubectl --context $CTX -n nvsentinel logs -l app.kubernetes.io/instance=nvsentinel \
   --prefix --tail=500 | grep -iE 'cordon|quarantin|recovered'
 ```
 
-## Cleanup
+## 清理
 
 ```bash
 kind delete cluster --name nvml-mock-nvsentinel

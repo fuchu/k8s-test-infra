@@ -1,16 +1,16 @@
 # libmockfs
 
-`libmockfs.so` is an `LD_PRELOAD` shim that redirects PCI sysfs and kernel-module accesses to a fake filesystem tree.
+`libmockfs.so` 是一个 `LD_PRELOAD` 垫片，把对 PCI sysfs 和内核模块的访问重定向到一个假的目录树。
 
-Use it to test software that finds PCI devices or checks whether a kernel module is loaded. That software then needs neither the real PCI topology nor the real module set.
+可用它来测试那些寻找 PCI 设备或检查某个内核模块是否已加载的软件。这类软件于是既不需要真实的 PCI 拓扑，也不需要真实的模块集合。
 
-One shim serves both surfaces. Both render under the same root, and the redirect is a single prefix table. A second shim would repeat this libc interposition to add two entries.
+一个垫片同时服务两类访问面。两者渲染在同一根目录下，重定向规则就是一张单一的前缀表。若再加一个垫片，就要重复这套 libc 拦截逻辑，只为新增两项。
 
-The root variable keeps the name `MOCK_PCI_ROOT`. The NRI plugin sets it in every workload container it serves, and the chart documentation names it, so it is a container-visible contract. Renaming it is a separate change.
+根目录变量名固定为 `MOCK_PCI_ROOT`。NRI 插件会在它服务的每个工作负载容器里设置它，chart 文档也提到了它，因此它是一个「容器可见的契约」。改名是一项独立的改动。
 
-## How it works
+## 工作原理
 
-When `MOCK_PCI_ROOT` is set, accesses under:
+当 `MOCK_PCI_ROOT` 被设置时，以下位置的访问：
 
 ```text
 /sys/bus/pci
@@ -21,45 +21,45 @@ When `MOCK_PCI_ROOT` is set, accesses under:
 /proc/driver/nvidia
 ```
 
-are rewritten by prepending `MOCK_PCI_ROOT`.
+会在前面拼上 `MOCK_PCI_ROOT` 进行重写。
 
-The shim redirects `/proc/modules` and `/proc/driver/nvidia` instead of mounting them. runc refuses any bind mount inside `/proc` that is not on its allowlist. Therefore `lsmod`, and Slurm's `AutoDetect=nvidia` GPU discovery, depend on this shim.
+该垫片重定向 `/proc/modules` 和 `/proc/driver/nvidia`，而不是把它们挂载进去。runc 拒绝任何 `/proc` 内、不在其白名单中的 bind mount。因此 `lsmod`，以及 Slurm 的 `AutoDetect=nvidia` GPU 发现，都依赖这个垫片。
 
-For example:
+例如：
 
 ```text
 /sys/bus/pci/devices/0000:07:00.0/config
 ```
 
-with:
+配合：
 
 ```bash
 MOCK_PCI_ROOT=/tmp/mock-pci
 ```
 
-becomes:
+会变为：
 
 ```text
 /tmp/mock-pci/sys/bus/pci/devices/0000:07:00.0/config
 ```
 
-All unrelated paths pass through unchanged.
+所有不相关的路径原样放行。
 
-The library intercepts common libc filesystem APIs including:
+该库拦截常见的 libc 文件系统 API，包括：
 
-* `open`, `open64`, `openat`, `openat64`
-* fortified `__open*_2` variants
-* `fopen`, `fopen64`
+* `open`、`open64`、`openat`、`openat64`
+* 加固版的 `__open*_2` 变体
+* `fopen`、`fopen64`
 * `opendir`
-* `stat`, `lstat`, `fstatat`, `statx`
-* `access`, `faccessat`
-* `readlink`, `readlinkat`
+* `stat`、`lstat`、`fstatat`、`statx`
+* `access`、`faccessat`
+* `readlink`、`readlinkat`
 
-The real libc implementations are called through `dlsym(RTLD_NEXT, ...)`.
+真正的 libc 实现通过 `dlsym(RTLD_NEXT, ...)` 调用。
 
-## Usage
+## 用法
 
-Create a fake tree that mirrors the expected PCI sysfs layout:
+创建一个镜像预期 PCI sysfs 布局的假目录树：
 
 ```text
 /tmp/mock-pci/
@@ -73,7 +73,7 @@ Create a fake tree that mirrors the expected PCI sysfs layout:
                     └── vendor
 ```
 
-Then run the target process with the shim preloaded:
+然后以预加载垫片的方式运行目标进程：
 
 ```bash
 MOCK_PCI_ROOT=/tmp/mock-pci \
@@ -81,8 +81,8 @@ LD_PRELOAD=/path/to/libmockfs.so \
 lspci
 ```
 
-If `MOCK_PCI_ROOT` is unset, the library is a no-op.
+若 `MOCK_PCI_ROOT` 未设置，该库就是个空操作（no-op）。
 
-## Scope
+## 作用范围
 
-This is userspace libc interposition. It does not modify, mount, or virtualize the real `/sys` filesystem and only affects processes started with the library preloaded.
+这是用户态的 libc 拦截。它不会修改、挂载或虚拟化真实的 `/sys` 文件系统，只影响以预加载方式启动的进程。

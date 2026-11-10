@@ -1,74 +1,51 @@
-# Run Mokka on Amazon EKS
+# 在 Amazon EKS 上运行 Mokka
 
-Install Mokka on CPU-only Amazon Elastic Kubernetes Service (EKS) workers,
-advertise simulated GPUs, and run an unmodified `nvidia-smi` from a neutral
-workload image.
+在只有 CPU 的 Amazon EKS 工作节点上安装 Mokka，让它对外宣称有模拟 GPU，然后从一个「干净」的普通业务镜像里直接运行未经修改的 `nvidia-smi`。
 
-This guide starts from an existing EKS cluster. If you do not have one, the
-optional Terraform path creates a disposable reference cluster. It creates
-billable AWS resources, so destroy that stack when you finish.
+本篇假设你已经有一个 EKS 集群。如果还没有，可以用可选的 Terraform 方案临时创建一个参考集群。注意：它会创建**计费的 AWS 资源**，用完记得销毁。
 
-## Validation scope
+## 这篇指南验证什么
 
-The procedure validates:
+本流程要验证的是：
 
-- Mokka's container runtime setup on standard managed CPU nodes, which carry no
-  NVIDIA software and no physical GPUs;
-- the integration between the NVIDIA device plugin, NVIDIA runtime, Container
-  Device Interface (CDI), and Mokka;
-- Mokka placement on a dedicated managed node group; and
-- simulated GPU injection into a normal application container.
+- Mokka 能否在标准托管 CPU 节点上完成容器运行时配置（这类节点既没有 NVIDIA 软件，也没有物理 GPU）；
+- NVIDIA device plugin、NVIDIA runtime、容器设备接口（CDI）与 Mokka 之间的配合是否正常；
+- Mokka 能否只部署在专用的托管节点组上；
+- 模拟 GPU 能否注入到一个普通的应用容器里。
 
-The reference configuration is deliberately small but spans availability zones
-to verify DaemonSet placement:
+参考配置刻意做得很小，但横跨两个可用区，用来验证 DaemonSet 的调度是否覆盖到每个节点：
 
-| Component | Validated value | Why |
+| 组件 | 验证时使用的取值 | 为什么这样选 |
 |---|---|---|
-| Region | `us-west-2` | Example default; override it in `terraform.tfvars` |
-| Kubernetes | EKS `1.35` | Matches the current Mokka Kind test target |
-| Workers | 2 × on-demand `t3.large` | CPU-only, enough memory for system and Mokka pods |
-| Worker image | EKS-optimized standard AL2023 x86_64, `1.35.7-20260911` | Plain containerd under systemd and no NVIDIA software, so Mokka sets up the NVIDIA runtime itself |
-| Worker placement | Private subnets in two availability zones, one shared NAT gateway | Runs one Mokka pod per worker without public worker IPs while keeping the reference cluster's NAT cost down |
-| Mokka | latest release; last validated with `0.5.0`, `gb300` profile | The install below takes the latest published chart, whose default image tag is the chart's appVersion |
-| Device plugin | `nvcr.io/nvidia/k8s-device-plugin:v0.18.2` | Advertises `nvidia.com/gpu` through Mokka's NVML implementation |
-| Container toolkit | `1.19.1`, shipped in the Mokka `0.5.0` image | Mokka installs the NVIDIA runtime and CDI hook on each worker and registers the runtime with containerd |
+| 区域 | `us-west-2` | 只是示例默认值，可在 `terraform.tfvars` 里改 |
+| Kubernetes | EKS `1.35` | 与当前 Mokka 在 Kind 上的测试目标版本一致 |
+| 工作节点 | 2 台按需计费的 `t3.large` | 纯 CPU，内存足够跑系统组件和 Mokka Pod |
+| 节点镜像 | EKS 优化版标准 AL2023 x86_64，`1.35.7-20260911` | 原生 containerd 跑在 systemd 下，且不带任何 NVIDIA 软件，因此 NVIDIA 运行时完全由 Mokka 来装 |
+| 节点网络位置 | 两个可用区的私有子网，共用一个 NAT 网关 | 每个 worker 跑一个 Mokka Pod，worker 不需要公网 IP，同时把参考集群的 NAT 成本压低 |
+| Mokka | 最新版；最后一次验证用的是 `0.5.0` + `gb300` 配置档 | 下面的安装命令取最新发布的 chart，其默认镜像标签就是 chart 的 appVersion |
+| Device plugin | `nvcr.io/nvidia/k8s-device-plugin:v0.18.2` | 通过 Mokka 的 NVML 实现对外暴露 `nvidia.com/gpu` |
+| Container toolkit | `1.19.1`，随 Mokka `0.5.0` 镜像一起提供 | Mokka 在每个 worker 上安装 NVIDIA runtime 和 CDI hook，并向 containerd 注册该运行时 |
 
-These versions record a reproducible Mokka validation target; they are not an
-AWS support statement. When updating Kubernetes or the AL2023 release, repeat
-the neutral-workload test rather than assuming the runtime configuration is
-unchanged.
+这些版本号记录的是一个**可复现的验证目标**，不代表 AWS 的支持承诺。升级 Kubernetes 或 AL2023 版本后，请重新跑一遍「干净业务镜像」测试，不要想当然地认为运行时配置没变。
 
-!!! warning "Use a test AWS account"
+!!! warning "请使用测试用的 AWS 账号"
 
-    The optional Terraform configuration creates IAM roles, networking, an EKS
-    cluster, and EC2 instances. Use an isolated account or obtain approval for
-    those resources. The `aws_account_id` variable prevents an accidental
-    apply to a different account, but it is not a substitute for
-    least-privilege IAM.
+    可选的 Terraform 配置会创建 IAM 角色、网络、EKS 集群和 EC2 实例。请使用隔离的账号，或先就这些资源取得授权。`aws_account_id` 变量能防止误把资源建到别的账号上，但它不能替代最小权限的 IAM 策略。
 
-## Prerequisites
+## 前置条件
 
-For every path, install these tools locally:
+无论走哪条路径，本地都要先装好：
 
 - [kubectl](https://kubernetes.io/docs/tasks/tools/)
-- [Helm](https://helm.sh/docs/intro/install/) 3.8 or newer
-- `curl` and `jq`
+- [Helm](https://helm.sh/docs/intro/install/) 3.8 或更高版本
+- `curl` 和 `jq`
 
-You also need an EKS cluster with at least one dedicated Linux x86_64 CPU
-worker whose image runs containerd under systemd, as the standard AL2023 image
-does. Mokka requires privileged pods and `hostPath` volumes. It installs the
-NVIDIA container runtime on each worker and makes it containerd's default
-runtime handler, `nvidia`, in Container Device Interface (CDI) mode, so the
-worker needs neither a physical GPU nor NVIDIA software.
-[Container runtime setup](../../../../components/node-daemon.md#container-runtime-setup)
-lists what that changes on the node.
+此外还需要一个 EKS 集群，其中至少有一台专用的 Linux x86_64 CPU worker，节点镜像里的 containerd 必须运行在 systemd 下（标准 AL2023 镜像就满足）。原因如下：Mokka 需要特权 Pod 和 `hostPath` 卷；它会在每个 worker 上安装 NVIDIA 容器运行时，并把它设为 containerd 的默认 runtime handler（`nvidia`），且工作在 CDI 模式。因此 worker 既不需要物理 GPU，也不需要预装 NVIDIA 软件。
+[容器运行时配置](../../../../components/node-daemon.md#container-runtime-setup) 列出了节点上具体会被改动的内容。
 
-A worker image that already installs NVIDIA Container Toolkit, such as the
-accelerated AL2023 image, is left as it is. Its runtime must then already be in
-CDI mode, because the default `auto` mode tries to initialize a physical GPU.
+如果节点镜像本身已经装了 NVIDIA Container Toolkit（例如加速版 AL2023 镜像），Mokka 会保持原样不动。此时该运行时必须已经是 CDI 模式，因为默认的 `auto` 模式会尝试初始化一块物理 GPU。
 
-Set variables for your cluster. The AWS variables are needed only when creating
-the optional reference cluster:
+先设置好集群相关的变量。其中 AWS 开头的变量只有在使用可选的参考集群时才用得上：
 
 ```bash
 export MOKKA_AWS_PROFILE=default
@@ -77,10 +54,9 @@ export MOKKA_CLUSTER=mokka-817
 export MOKKA_CONTEXT=mokka-817
 ```
 
-## 1. Download the installation assets
+## 1. 下载安装所需文件
 
-The guide uses published images and the assets beside this page; it does not
-need a source checkout.
+本指南使用已发布的镜像和本页同目录下的配置文件，不需要克隆源码仓库。
 
 ```bash
 mkdir mokka-eks-guide
@@ -93,16 +69,13 @@ for file in mokka-values.yaml device-plugin-values.yaml verify-workload.yaml; do
 done
 ```
 
-These assets scope Mokka and the device plugin to nodes labelled
-`mokka.nvidia.com/type=sgpu`.
+这些文件会把 Mokka 和 device plugin 限定在带有 `mokka.nvidia.com/type=sgpu` 标签的节点上。
 
-## 2. Select a cluster path
+## 2. 选择集群方案
 
-### Use an existing cluster
+### 使用已有集群
 
-Set `MOKKA_CONTEXT` to the kubeconfig context for the cluster. Select the
-dedicated CPU workers and label each one; do not label real GPU nodes or a
-shared general-purpose pool:
+把 `MOKKA_CONTEXT` 设成该集群在 kubeconfig 里的 context。挑出专用的 CPU worker 并逐个打标签；**不要**给真正的 GPU 节点或共用的通用节点池打这个标签：
 
 ```bash
 kubectl --context "${MOKKA_CONTEXT}" get nodes -o wide
@@ -110,34 +83,21 @@ kubectl --context "${MOKKA_CONTEXT}" label node \
   <worker-name> mokka.nvidia.com/type=sgpu
 ```
 
-Mokka restarts containerd on each labelled node when it sets up the runtime and
-again when its pod stops, which is one more reason to keep the label off shared
-nodes. Continue at [Step 4](#4-install-mokka).
+Mokka 配置运行时时会重启被标记节点上的 containerd，Pod 停止时还会再重启一次——这也是不要给共用节点打标签的另一个理由。完成后直接跳到 [第 4 步](#4-install-mokka)。
 
-### Create the reference cluster
+### 新建参考集群
 
-Continue with Step 3. The supplied Terraform creates and labels two workers. It
-is an optional reproducibility aid, not a requirement for installing Mokka.
+继续看第 3 步。随附的 Terraform 会创建两台 worker 并打好标签。它只是一个可选的复现辅助工具，并不是安装 Mokka 的必要条件。
 
-## 3. Create the optional reference cluster
+## 3. 创建可选的参考集群
 
-Install [AWS CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
-and [Terraform](https://developer.hashicorp.com/terraform/install) 1.5.7 or
-newer. Your AWS identity needs permission to manage EKS, EC2 networking and
-instances, IAM roles, Key Management Service (KMS) keys, and CloudWatch log
-groups. A production account should use narrowly scoped permissions.
+安装 [AWS CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) 和 [Terraform](https://developer.hashicorp.com/terraform/install) 1.5.7 或更高版本。你的 AWS 身份需要具备管理 EKS、EC2 网络与实例、IAM 角色、KMS 密钥以及 CloudWatch 日志组的权限。生产账号请使用严格收敛的权限范围。
 
-!!! warning "Cluster-creator access is only for the reference cluster"
+!!! warning "集群创建者管理员权限仅供参考集群使用"
 
-    The template sets `enable_cluster_creator_admin_permissions = true`. The
-    EKS module creates an access entry that grants the Terraform caller the
-    `AmazonEKSClusterAdminPolicy`, which provides full cluster-admin access.
-    This keeps a disposable test cluster operable by the person who creates it;
-    it is not a recommended production access model. Production deployments
-    should manage access entries explicitly and grant each operator or role
-    only the permissions it needs.
+    模板里设置了 `enable_cluster_creator_admin_permissions = true`。EKS 模块会创建一条访问条目，把 `AmazonEKSClusterAdminPolicy` 授予执行 Terraform 的身份，也就是完整的 cluster-admin 权限。这样一次性测试集群的创建者就能直接操作它，但这**不是**推荐的生产访问模型。生产部署应显式管理访问条目，只给每个操作员或角色授予其所需的最小权限。
 
-Download the Terraform assets:
+下载 Terraform 文件：
 
 ```bash
 mkdir terraform
@@ -147,48 +107,39 @@ for file in versions.tf variables.tf main.tf outputs.tf \
 done
 ```
 
-The workers, not the control plane, are in your VPC. They run the standard
-AL2023 image with no bootstrap changes; Mokka prepares their containerd in
-Step 4. See [`terraform/main.tf`](terraform/main.tf) for the reference
-configuration.
+放在你的 VPC 里的是 worker 节点，控制平面不在其中。worker 使用标准 AL2023 镜像，启动阶段不做任何改动；containerd 由 Mokka 在第 4 步里配置。具体配置见 [`terraform/main.tf`](terraform/main.tf)。
 
-### Authenticate and constrain access
+### 完成认证并收紧访问范围
 
-Authenticate using your normal AWS CLI flow. For IAM Identity Center (SSO), for
-example:
+按你平时的方式登录 AWS CLI。以 IAM Identity Center（SSO）为例：
 
 ```bash
 aws sso login --profile "${MOKKA_AWS_PROFILE}"
 aws sts get-caller-identity --profile "${MOKKA_AWS_PROFILE}"
 ```
 
-Confirm that the returned account is the one you intend to modify. Then prepare
-the Terraform inputs:
+确认返回的账号确实是你要修改的那个。然后准备 Terraform 输入：
 
 ```bash
 cp terraform/terraform.tfvars.example terraform/terraform.tfvars
 curl -fsS https://checkip.amazonaws.com
 ```
 
-Edit `terraform/terraform.tfvars` and replace:
+编辑 `terraform/terraform.tfvars`，替换两处：
 
-- `aws_account_id` with the 12-digit account from `get-caller-identity`; and
-- the example API CIDR with the displayed public IP plus `/32`.
+- 把 `aws_account_id` 换成 `get-caller-identity` 返回的 12 位账号 ID；
+- 把示例里的 API 访问 CIDR 换成上一步显示的公网 IP，并加上 `/32`。
 
-The template rejects `0.0.0.0/0`. Its public EKS endpoint is reachable only
-from the listed CIDRs, while its private endpoint remains available inside the
-VPC.
+模板会拒绝 `0.0.0.0/0`。EKS 的公网端点只允许名单里的 CIDR 访问，私网端点则始终在 VPC 内可用。
 
-Terraform's AWS provider may otherwise select credentials from another
-credential source. Export the exact profile credentials into this shell before
-each Terraform operation:
+Terraform 的 AWS provider 可能会从别的凭据来源取到凭据。请在**每次**执行 Terraform 操作前，把指定 profile 的凭据显式导出到当前 shell：
 
 ```bash
 eval "$(aws configure export-credentials \
   --profile "${MOKKA_AWS_PROFILE}" --format env)"
 ```
 
-### Apply Terraform
+### 执行 Terraform
 
 ```bash
 cd terraform
@@ -200,10 +151,9 @@ terraform apply mokka.tfplan
 cd ..
 ```
 
-Creation normally takes 15–25 minutes. Keep the generated
-`terraform/terraform.tfstate` file: it is required for an exact destroy.
+创建通常需要 15–25 分钟。请保留生成的 `terraform/terraform.tfstate` 文件，精确销毁集群时需要它。
 
-Configure kubectl and verify the cluster:
+配置 kubectl 并确认集群可用：
 
 ```bash
 aws eks update-kubeconfig \
@@ -218,10 +168,9 @@ kubectl --context "${MOKKA_CONTEXT}" get nodes -o wide
 kubectl --context "${MOKKA_CONTEXT}" get pods -n kube-system
 ```
 
-Expect two Ready AL2023 nodes in different availability zones, with no external
-IP address. CoreDNS, `aws-node`, and `kube-proxy` should be Running.
+预期看到两台处于 Ready 的 AL2023 节点，分属不同可用区，且都没有外网 IP。CoreDNS、`aws-node` 和 `kube-proxy` 应处于 Running。
 
-## 4. Install Mokka
+## 4. 安装 Mokka <a id="4-install-mokka"></a>
 
 ```bash
 helm upgrade --install nvml-mock \
@@ -238,24 +187,16 @@ kubectl --context "${MOKKA_CONTEXT}" \
   --namespace mokka exec daemonset/nvml-mock -- nvidia-smi -L
 ```
 
-There should be one Ready Mokka pod per worker. The command reports four
-`NVIDIA GB300 NVL` devices. It proves that Mokka staged its mock driver tree,
-configuration, device nodes, and CDI specification on a node.
+每台 worker 上应该各有一个 Ready 的 Mokka Pod。上面的命令会列出四块 `NVIDIA GB300 NVL` 设备，这说明 Mokka 已在节点上就位：模拟驱动目录、配置、设备节点和 CDI 规格文件都已生成。
 
-A Mokka pod becomes Ready only once containerd on its worker serves the
-`nvidia` runtime handler as its default, and getting there restarts containerd
-on the worker once. `mokka-values.yaml` sets containerd's config dir, where
-Mokka's config file goes, to `/etc/containerd/config.d`. The `config.toml` that
-`nodeadm` rewrites at every boot already imports that directory, so the setup
-does not depend on an `imports` entry the next boot would remove.
+!!! note "国内镜像拉取"
+    本指南会从 `ghcr.io`（nvml-mock）和 `nvcr.io`（NVIDIA device plugin）拉取镜像。若这些镜像源拉取缓慢或超时，可给相关 chart 的镜像加私有仓库前缀（如给 `nvml-mock` 加 `--set global.imageRegistry=harbor.heilansc.com/ghcr.io`；device plugin 在 `device-plugin-values.yaml` 里把镜像 repository 改为 `harbor.heilansc.com/nvcr.io/nvidia/k8s-device-plugin`）。具体做法与示例见[国内镜像加速](../README.md#domestic-mirror)。
 
-## 5. Advertise the simulated GPUs
+只有当所在 worker 的 containerd 把 `nvidia` 作为默认 runtime handler 之后，Mokka Pod 才会变成 Ready；为达到这个状态，worker 上的 containerd 会被重启一次。`mokka-values.yaml` 把 containerd 的配置目录（Mokka 配置文件存放处）设为 `/etc/containerd/config.d`。`nodeadm` 每次启动时改写的 `config.toml` 本来就会导入这个目录，因此这套配置不依赖某条会在下次启动时被删掉的 `imports` 条目。
 
-Mokka provides the device behavior; the unmodified NVIDIA device plugin tells
-the kubelet that the devices are schedulable resources. Install the official
-chart with the supplied values. They point the plugin at Mokka's staged driver
-tree, select the simulated-GPU workers, and remove the chart's physical-GPU
-node affinity:
+## 5. 对外暴露模拟 GPU
+
+Mokka 负责「让设备看起来像真的」，而未加修改的 NVIDIA device plugin 负责告诉 kubelet：这些设备是可以被调度的资源。用随附的 values 安装官方 chart，它会做三件事：把插件指向 Mokka 准备好的驱动目录、只选中模拟 GPU 的 worker、以及去掉 chart 里针对物理 GPU 的节点亲和性约束：
 
 ```bash
 helm repo add nvdp https://nvidia.github.io/k8s-device-plugin
@@ -282,25 +223,25 @@ kubectl --context "${MOKKA_CONTEXT}" get nodes -o json | jq -r '
   @tsv'
 ```
 
-Expect `sgpu` and `4` beside both nodes.
+两台节点旁应分别显示 `sgpu` 和 `4`。
 
-The request path is:
+一次 GPU 请求的完整链路如下：
 
 ```mermaid
 flowchart LR
-    Pod[Pod declares nvidia.com/gpu: 1]
-    Scheduler[Kubernetes scheduler selects a node]
-    Kubelet[Kubelet selects an advertised GPU UUID]
-    Plugin[NVIDIA device plugin returns NVIDIA_VISIBLE_DEVICES=UUID]
-    Handler[containerd starts the container<br/>through its default handler, nvidia]
-    Runtime[NVIDIA runtime resolves nvidia.com/gpu=UUID]
-    Spec[Mokka-generated /run/cdi/nvidia.yaml]
-    OCI[Runtime applies the spec's container edits]
-    App[Unmodified application sees one simulated GPU]
+    Pod[Pod 声明 nvidia.com/gpu: 1]
+    Scheduler[Kubernetes 调度器选定节点]
+    Kubelet[Kubelet 选出一个已暴露的 GPU UUID]
+    Plugin[NVIDIA device plugin 返回 NVIDIA_VISIBLE_DEVICES=UUID]
+    Handler[containerd 通过其默认 handler nvidia 启动容器]
+    Runtime[NVIDIA runtime 解析 nvidia.com/gpu=UUID]
+    Spec[Mokka 生成的 /run/cdi/nvidia.yaml]
+    OCI[Runtime 应用规格中的容器修改项]
+    App[未修改的应用看到一块模拟 GPU]
 
     Pod --> Scheduler
     Scheduler --> Kubelet
-    Kubelet -->|Allocate UUID| Plugin
+    Kubelet -->|分配 UUID| Plugin
     Plugin --> Handler
     Handler --> Runtime
     Runtime --> Spec
@@ -308,22 +249,11 @@ flowchart LR
     OCI --> App
 ```
 
-The default device-plugin discovery and environment-allocation strategies are
-intentional. The plugin discovers the simulated devices through Mokka's driver
-root and advertises their UUIDs to the kubelet. When a pod requests
-`nvidia.com/gpu`, the kubelet selects an advertised UUID and the plugin returns
-it through `NVIDIA_VISIBLE_DEVICES`. containerd starts the container under its
-default handler, the NVIDIA runtime Mokka installed in CDI mode, which resolves
-that UUID against the `nvidia.com/gpu` specification generated by Mokka and
-applies its container edits. This guide validates the
-device plugin's default `envvar` allocation strategy. CDI-native device-plugin
-strategies use a different, device-plugin-owned specification and are outside
-the scope of this guide.
+device plugin 保持默认的发现策略和环境变量分配策略，这是有意为之。插件通过 Mokka 的驱动根目录发现模拟设备，并把它们的 UUID 上报给 kubelet。当 Pod 申请 `nvidia.com/gpu` 时，kubelet 挑一个已上报的 UUID，插件通过 `NVIDIA_VISIBLE_DEVICES` 把它返回。containerd 用默认 handler（也就是 Mokka 以 CDI 模式安装的 NVIDIA runtime）启动容器，runtime 拿这个 UUID 去匹配 Mokka 生成的 `nvidia.com/gpu` 规格，并应用其中的容器修改项。本指南验证的是 device plugin 默认的 `envvar` 分配策略；CDI 原生策略使用的是由 device plugin 自己维护的另一套规格，不在本篇范围内。
 
-## 6. Test from a neutral workload
+## 6. 用一个「干净」的业务容器验证
 
-The verification image is plain Ubuntu. It contains neither `nvidia-smi` nor
-Mokka, so a successful run proves that the NVIDIA runtime injected both:
+验证用的镜像就是普通 Ubuntu，里面既没有 `nvidia-smi` 也没有 Mokka。所以只要能跑通，就证明 NVIDIA runtime 把这两样都注入了进去：
 
 ```bash
 kubectl --context "${MOKKA_CONTEXT}" delete pod mokka-verify \
@@ -335,33 +265,27 @@ kubectl --context "${MOKKA_CONTEXT}" wait \
 kubectl --context "${MOKKA_CONTEXT}" logs mokka-verify
 ```
 
-Expected output contains one allocated GB300, not all four:
+预期输出里只有一块已分配的 GB300，而不是全部四块：
 
 ```text
 GPU 0: NVIDIA GB300 NVL (UUID: GPU-b300b300-...)
 ```
 
-This validates three separate outcomes: Kubernetes scheduled a GPU request,
-the NVIDIA runtime injected the mock driver into an ordinary image, and the
-selected GB300 configuration reached the consumer.
+这一条命令同时验证了三件事：Kubernetes 正确调度了 GPU 请求；NVIDIA runtime 把模拟驱动注入进了普通镜像；所选的 GB300 配置确实传到了消费方。
 
-## Troubleshooting
+## 排查问题
 
-### Terraform uses the wrong AWS identity
+### Terraform 用错了 AWS 身份
 
-Run `aws sts get-caller-identity`, re-export the selected profile credentials,
-and retry. The provider's `allowed_account_ids` check stops the apply if the
-account differs from `terraform.tfvars`.
+运行 `aws sts get-caller-identity`，重新导出所选 profile 的凭据后重试。provider 的 `allowed_account_ids` 检查会在账号与 `terraform.tfvars` 不一致时拦下 apply。
 
-### kubectl cannot reach the API server
+### kubectl 连不上 API server
 
-Your public IP may have changed. Update
-`cluster_endpoint_public_access_cidrs` in `terraform.tfvars`, export the AWS
-credentials again, and run `terraform apply`.
+可能是你的公网 IP 变了。更新 `terraform.tfvars` 中的 `cluster_endpoint_public_access_cidrs`，重新导出 AWS 凭据，再执行一次 `terraform apply`。
 
-### The device plugin reports no GPUs
+### device plugin 报告没有 GPU
 
-Confirm that Mokka is Ready first, then inspect the plugin:
+先确认 Mokka 已经 Ready，再看插件日志：
 
 ```bash
 kubectl --context "${MOKKA_CONTEXT}" --namespace mokka get pods -o wide
@@ -369,20 +293,16 @@ kubectl --context "${MOKKA_CONTEXT}" --namespace nvidia-device-plugin logs \
   daemonset/nvidia-device-plugin --tail=100
 ```
 
-Warnings about optional graphics libraries are expected because Mokka stages
-the NVML/CUDA management surface, not a complete physical GPU driver.
+出现「缺少可选图形库」之类的告警是正常的：Mokka 提供的是 NVML/CUDA 管理接口，不是完整的物理 GPU 驱动。
 
-### The workload says `nvidia-smi: not found`
+### 业务容器报 `nvidia-smi: not found`
 
-containerd on that worker did not run the pod under the NVIDIA runtime: the
-setup failed, and the worker's Mokka pod is not Ready.
-[Troubleshooting](../../../../troubleshooting.md#pods-get-no-mock-driver-or-the-node-pod-is-not-ready)
-shows where the Mokka pod logs why.
+说明该 worker 上的 containerd 没有用 NVIDIA runtime 启动这个 Pod：运行时配置没成功，该 worker 的 Mokka Pod 也不是 Ready。
+[排查指南](../../../../troubleshooting.md#pods-get-no-mock-driver-or-the-node-pod-is-not-ready) 说明了去哪里看 Mokka Pod 记录的原因。
 
-## Clean up
+## 清理
 
-Remove only the Kubernetes test objects if you want to keep experimenting with
-the cluster:
+如果还想继续用这个集群做实验，可以只删掉本次创建的 Kubernetes 测试对象：
 
 ```bash
 kubectl --context "${MOKKA_CONTEXT}" delete -f verify-workload.yaml
@@ -391,11 +311,9 @@ helm --kube-context "${MOKKA_CONTEXT}" uninstall nvidia-device-plugin \
 helm --kube-context "${MOKKA_CONTEXT}" uninstall nvml-mock --namespace mokka
 ```
 
-Uninstalling Mokka removes the `nvidia` handler from containerd on each worker,
-which returns to its own default handler, and restarts containerd there.
+卸载 Mokka 会从每个 worker 的 containerd 里移除 `nvidia` handler，containerd 回退到自己的默认 handler，并就地重启一次。
 
-If you created the optional reference cluster, destroy all of its AWS resources
-when you finish:
+如果你创建的是可选的参考集群，用完后请销毁它的全部 AWS 资源：
 
 ```bash
 eval "$(aws configure export-credentials \
@@ -403,6 +321,4 @@ eval "$(aws configure export-credentials \
 terraform -chdir=terraform destroy
 ```
 
-Review the destroy plan, enter `yes`, and wait for completion. Confirm that it
-reports `Destroy complete` before deleting the local guide directory or its
-Terraform state.
+检查销毁计划，输入 `yes` 并等待完成。确认输出 `Destroy complete` 之后，再删除本地的指南目录和 Terraform state 文件。

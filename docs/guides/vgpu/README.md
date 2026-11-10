@@ -1,20 +1,12 @@
-# vGPU Host and Guest
+# vGPU 宿主机与客户机
 
-NVIDIA vGPU splits a physical GPU into virtual GPUs that a hypervisor hands to
-virtual machines. Mokka simulates either side of that split on a CPU node: a
-**host**, whose GPUs run the vGPU manager and a set of vGPU instances, or a
-**guest**, whose GPUs are the licensed vGPUs a VM sees. `nvidia-smi` reads both
-as it would on real hardware. No hypervisor or VM is involved.
+NVIDIA vGPU 会把一块物理 GPU 拆成多个虚拟 GPU，再由 hypervisor 分配给虚拟机。Mokka 能在一台 CPU 节点上模拟拆分的**任意一侧**：作为**宿主机**时，它的 GPU 上运行着 vGPU manager 和一组 vGPU 实例；作为**客户机**时，它的 GPU 就是虚拟机看到的、已授权的 vGPU。`nvidia-smi` 读取两侧的方式和在真实硬件上一样，全程不需要 hypervisor 或虚拟机。
 
-A node plays one side at a time, chosen by `gpu.vgpu.mode`. The two values
-files below are complete for an A100 node; every field they use, and the rules
-a block must follow, are in the [vGPU reference](../../vgpu.md).
+一个节点一次只能扮演其中一侧，由 `gpu.vgpu.mode` 决定。下面两个 values 文件对 A100 节点来说是完整可用的；其中每个字段的含义，以及每个配置块必须遵守的规则，都写在 [vGPU 参考](../../vgpu.md) 里。
 
-## Simulate a vGPU host
+## 模拟 vGPU 宿主机 <a id="simulate-a-vgpu-host"></a>
 
-Save this as `host-values.yaml`. It declares one compute type,
-`NVIDIA A100-4C`, and runs two instances of it on every GPU. An install always
-declares its own types; the [reference](../../vgpu.md#host) explains why.
+把下面内容存为 `host-values.yaml`。它声明了一种计算类型 `NVIDIA A100-4C`，并在每块 GPU 上跑两个该类型的实例。每次安装都必须自己声明类型，原因见[参考文档](../../vgpu.md#host)。
 
 ```yaml title="host-values.yaml"
 gpu:
@@ -44,8 +36,10 @@ POD=$(kubectl -n mokka get pod -l app.kubernetes.io/name=nvml-mock \
 kubectl -n mokka exec "$POD" -- nvidia-smi vgpu
 ```
 
-Each GPU lists its two instances (output trimmed to the first two of eight
-GPUs):
+每块 GPU 都会列出自己的两个实例（下面输出只截取 8 块 GPU 中的前两块）：
+
+!!! note "国内镜像拉取"
+    若 `ghcr.io` 等镜像源拉取缓慢或超时，可给 `nvml-mock` 加 `--set global.imageRegistry=harbor.heilansc.com/ghcr.io`。具体做法与示例见[国内镜像加速](../README.md#domestic-mirror)。
 
 ```text
 +-----------------------------------------------------------------------------+
@@ -64,12 +58,9 @@ GPUs):
 +---------------------------------+------------------------------+------------+
 ```
 
-The vGPU ID encodes its GPU: GPU 0's instances are `1001` and `1002`, GPU 1's
-are `2001` and `2002`. The [reference](../../vgpu.md#host-identities) gives the
-rule.
+vGPU ID 里编码了它属于哪块 GPU：GPU 0 的实例是 `1001`、`1002`，GPU 1 的是 `2001`、`2002`。具体规则见[参考文档](../../vgpu.md#host-identities)。
 
-`nvidia-smi vgpu -q -i 0` details one GPU's instances (trimmed to the first
-instance's identity and license rows):
+`nvidia-smi vgpu -q -i 0` 会展开某块 GPU 上的实例详情（下面只截取第一个实例的身份与授权相关行）：
 
 ```text
 GPU 00000000:07:00.0
@@ -88,20 +79,13 @@ GPU 00000000:07:00.0
         ECC Mode                          : Enabled
 ```
 
-The UUIDs are derived from the GPU's own, so they read the same on every run.
-Some rows print `N/A` because the mock does not implement the call, such as
-`Placement ID`; the [reference](../../vgpu.md#host-behaviour) lists them.
-`GPU Instance ID` prints `N/A` for another reason: the instance is time-sliced,
-not backed by a MIG GPU instance.
+这些 UUID 由 GPU 自身的 UUID 推导而来，所以每次运行结果都一样。有些行显示 `N/A`，是因为模拟层没有实现对应调用（例如 `Placement ID`），完整清单见[参考文档](../../vgpu.md#host-behaviour)。`GPU Instance ID` 显示 `N/A` 则是另一个原因：该实例是时间片复用的，背后并没有 MIG GPU instance。
 
-`nvidia-smi vgpu -s` lists the supported types and `nvidia-smi vgpu -c` the
-types that could still be created. With two of ten slots in use, both print
-`NVIDIA A100-4C`.
+`nvidia-smi vgpu -s` 列出支持的类型，`nvidia-smi vgpu -c` 列出当前还能创建的类型。10 个槽位用了 2 个时，两条命令都会输出 `NVIDIA A100-4C`。
 
-## Simulate a vGPU guest
+## 模拟 vGPU 客户机
 
-Save this as `guest-values.yaml`. It makes every GPU a licensed vGPU running
-on host driver `550.163.01`, branch `r550_00`.
+把下面内容存为 `guest-values.yaml`。它会让每块 GPU 都成为已授权的 vGPU，宿主机驱动版本 `550.163.01`、分支 `r550_00`。
 
 ```yaml title="guest-values.yaml"
 gpu:
@@ -116,7 +100,7 @@ gpu:
         state: licensed
 ```
 
-It replaces the host values, so the same release is upgraded:
+这份配置会**替换**宿主机那份，所以是对同一个 release 做升级：
 
 ```bash
 helm upgrade --install nvml-mock oci://ghcr.io/nvidia/k8s-test-infra/chart/nvml-mock \
@@ -129,8 +113,7 @@ POD=$(kubectl -n mokka get pod -l app.kubernetes.io/name=nvml-mock \
 kubectl -n mokka exec "$POD" -- nvidia-smi -q -i 0
 ```
 
-The GPU reports itself as a vGPU and shows its license (trimmed to the
-virtualization and license rows):
+GPU 会把自己报告成 vGPU，并展示授权信息（下面只截取虚拟化和授权相关行）：
 
 ```text
     GPU Virtualization Mode
@@ -142,21 +125,15 @@ virtualization and license rows):
         License Status                    : Licensed (Expiry: Permanent)
 ```
 
-The host driver version and branch do not appear in `nvidia-smi`; they reach
-GPU Feature Discovery through the PCI capability the
-[reference](../../vgpu.md#guest) describes.
+宿主机驱动版本和分支不会出现在 `nvidia-smi` 里，它们是通过[参考文档](../../vgpu.md#guest)描述的 PCI capability 传给 GPU Feature Discovery 的。
 
-## Troubleshooting
+## 排查问题
 
-**`helm install` fails with `gpu.vgpu.mode is host but gpu.vgpu.types declares
-no vGPU types`.** A host needs at least one type, so the chart refuses to render
-without one and nothing is deployed. Add `gpu.vgpu.types`, as
-`host-values.yaml` [above](#simulate-a-vgpu-host) does.
+**`helm install` 报 `gpu.vgpu.mode is host but gpu.vgpu.types declares no vGPU types`。**
+宿主机至少要有一种类型，缺少时 chart 会拒绝渲染，也就不会部署任何东西。像[上面的 `host-values.yaml`](#simulate-a-vgpu-host) 那样补上 `gpu.vgpu.types`。
 
-**`helm install --wait` times out, and the `nvml-mock` pods stay in `Init:0/1`
-and restart.** The node agent refused the `gpu.vgpu` block and never becomes
-ready, so its startup probe fails; `--wait` reports that only as a timeout.
-The node agent's log names the field:
+**`helm install --wait` 超时，`nvml-mock` Pod 一直停在 `Init:0/1` 并反复重启。**
+说明节点代理（node agent）拒绝了 `gpu.vgpu` 配置块，始终无法就绪，启动探针因此失败；而 `--wait` 只会把它报成超时。节点代理的日志里会点名具体字段：
 
 ```bash
 kubectl -n mokka logs "$POD" -c node-agent | grep 'state source error'
@@ -166,20 +143,18 @@ kubectl -n mokka logs "$POD" -c node-agent | grep 'state source error'
 {"level":"warn","time":"2026-10-14T07:05:29.955Z","msg":"state source error; keeping cached state","error":"/etc/nvml-mock/config.yaml: device_defaults.virtualization.vgpu.instances[0].type: \"NVIDIA A100-8C\" is not a declared vGPU type"}
 ```
 
-Fix the field against the [validation rules](../../vgpu.md#validation) and run
-`helm upgrade` again.
+对照[校验规则](../../vgpu.md#validation)修正该字段，再执行一次 `helm upgrade`。
 
-**`nvidia-smi vgpu` says `No supported devices in vGPU mode`.** The node is not
-a vGPU host: `gpu.vgpu.mode` is not `host`. A guest node prints the same,
-because `nvidia-smi vgpu` is a host-side view.
+**`nvidia-smi vgpu` 提示 `No supported devices in vGPU mode`。**
+该节点不是 vGPU 宿主机，即 `gpu.vgpu.mode` 不是 `host`。客户机节点也会输出这句话，因为 `nvidia-smi vgpu` 是宿主机侧的视图。
 
-**`nvidia-smi pmon` fails on a host node.** Expected: `pmon` declines a GPU
-running the vGPU manager, as it does on a real hypervisor.
+**在宿主机节点上执行 `nvidia-smi pmon` 失败。**
+属于预期行为：`pmon` 会拒绝运行着 vGPU manager 的 GPU，真实 hypervisor 上也是如此。
 
-## Related
+## 延伸阅读
 
-| To read about | See |
+| 想了解 | 参见 |
 |---|---|
-| Every `gpu.vgpu` chart value | [vGPU: Under the chart](../../vgpu.md#under-the-chart) |
-| Every profile field, the identity rules and what is not simulated | [vGPU](../../vgpu.md) |
-| The rest of a profile's `virtualization` block | [Configuration](../../configuration.md#virtualization) |
+| 全部 `gpu.vgpu` chart 配置项 | [vGPU：chart 之下](../../vgpu.md#under-the-chart) |
+| 配置档的每个字段、身份规则以及未模拟的部分 | [vGPU](../../vgpu.md) |
+| 配置档里 `virtualization` 块的其余内容 | [配置](../../configuration.md#virtualization) |

@@ -1,86 +1,65 @@
 # Run:ai Fake GPU Operator
 
-Run Mokka and Run:ai's [fake-gpu-operator](https://github.com/run-ai/fake-gpu-operator)
-(FGO) in one cluster, each serving the nodes it is better at.
+把 Mokka 和 Run:ai 的 [fake-gpu-operator](https://github.com/run-ai/fake-gpu-operator)（FGO）放进同一个集群，各管自己更擅长的那部分节点。
 
-## Why pair them
+## 为什么要搭配使用
 
-FGO simulates GPUs at the Kubernetes API level. It advertises GPU resources to
-the scheduler without touching the driver stack, which makes it very fast and
-lets it back hundreds of KWOK virtual nodes.
+FGO 是在 **Kubernetes API 层面**模拟 GPU：它直接向调度器声明 GPU 资源，完全不碰驱动栈，因此速度极快，还能撑起几百个 KWOK 虚拟节点。
 
-Mokka simulates at the driver level. A real `libnvidia-ml.so` inside the pod
-means `nvidia-smi`, DCGM and the GPU Operator validator all work.
+Mokka 则是在**驱动层面**模拟：Pod 里有一个真实的 `libnvidia-ml.so`，所以 `nvidia-smi`、DCGM 和 GPU Operator 的 validator 都能照常工作。
 
-Pairing them gives a **mixed cluster**: a handful of nodes with full driver
-fidelity, and a large fleet of cheap virtual ones.
+两者搭配，就得到一个**混合集群**：少数节点具备完整的驱动保真度，其余是一大群低成本的虚拟节点。
 
-| | FGO alone | Mokka alone | Together |
+| | 只用 FGO | 只用 Mokka | 两者搭配 |
 |---|---|---|---|
-| Advertises GPUs to the scheduler | yes | yes | yes |
-| KWOK virtual nodes | yes | no | yes |
-| Real NVML inside pods | no | yes | on the Mokka nodes |
-| Real `nvidia-smi` output | limited | yes | on the Mokka nodes |
-| DCGM metrics | 3 synthetic | real | real on the Mokka nodes |
-| GPU Operator validation | no | yes | on the Mokka nodes |
-| Scale to 1000+ nodes | yes | no | yes |
+| 向调度器声明 GPU | 是 | 是 | 是 |
+| KWOK 虚拟节点 | 是 | 否 | 是 |
+| Pod 内有真实 NVML | 否 | 是 | 仅 Mokka 节点 |
+| 真实的 `nvidia-smi` 输出 | 有限 | 是 | 仅 Mokka 节点 |
+| DCGM 指标 | 3 个合成值 | 真实 | 仅 Mokka 节点上真实 |
+| GPU Operator 校验 | 否 | 是 | 仅 Mokka 节点 |
+| 扩展到 1000+ 节点 | 是 | 否 | 是 |
 
-!!! warning "This pairing is not exercised in CI"
-    Mokka's side of the contract is verified — the ConfigMap shape is asserted
-    by unit tests and by the `fgo` end-to-end case. But the two projects have
-    never been run together in CI, and FGO is neither vendored nor pinned here.
-    Re-check FGO's loader before relying on any of this.
+!!! warning "这套搭配没有在 CI 中验证过"
+    Mokka 这一侧的契约是验过的：ConfigMap 结构有单元测试和 `fgo` 端到端用例做断言。但两个项目从未在 CI 里一起跑过，而且这里既没有 vendor FGO，也没有固定它的版本。依赖本文结论之前，请重新核对 FGO 的加载逻辑。
 
-## The discovery contract
+## 发现契约 <a id="the-discovery-contract"></a>
 
-This is the part that breaks silently, so it is worth understanding before you
-install anything.
+这是最容易**悄悄出问题**的一环，装之前值得先弄明白。
 
-FGO does **not** watch for profile ConfigMaps or select them by label. Its
-loader does a direct `Get` by name and reads one data key. Three things must
-match exactly, and each is fatal on its own:
+FGO 不会去监听带某些标签的 profile ConfigMap，也不会按标签筛选。它的加载器直接按名字 `Get`，并且只读一个 data key。下面三项必须分毫不差，任何一项错了都会直接失败：
 
-| Field | Value | If it is wrong |
+| 字段 | 必须是 | 写错了会怎样 |
 |---|---|---|
-| Name | `gpu-profile-<profile>` | `NotFound` |
-| Data key | `profile.yaml` | "missing key" |
-| Namespace | FGO's own release namespace | `NotFound` — the loader has no cross-namespace fallback |
+| 名称 | `gpu-profile-<profile>` | `NotFound` |
+| Data key | `profile.yaml` | 报 “missing key” |
+| 命名空间 | FGO 自己 release 所在的命名空间 | `NotFound`——加载器不会跨命名空间回退 |
 
-Because the names carry no release prefix, two Mokka releases in one namespace
-collide on these eight ConfigMaps. Enable the integration on one release per
-namespace.
+由于这些名字不带 release 前缀，同一个命名空间里装两个 Mokka release 就会在这 8 个 ConfigMap 上撞车。**每个命名空间只给一个 release 开启该集成。**
 
-!!! warning "Set FGO's `builtinProfiles.enabled=false` first"
-    FGO ships its own profiles under the same seven names, owned by its own
-    Helm release. Helm 3 refuses to adopt resources owned by another release,
-    so whichever chart installs second fails with `invalid ownership metadata`.
-    The two profile sets are alternatives, not complements.
+!!! warning "先把 FGO 的 `builtinProfiles.enabled=false` 设上"
+    FGO 自带一套 profile，用的正是同样七个名字，且归它自己的 Helm release 所有。Helm 3 拒绝接管属于别的 release 的资源，所以后装的那个 chart 一定会报 `invalid ownership metadata`。这两套 profile 是二选一，不能互补叠加。
 
-## Prerequisites
+## 前置条件
 
-- [Docker](https://docs.docker.com/get-started/get-docker/) and
-  [Kind](https://kind.sigs.k8s.io/) — this guide creates its own cluster
-  (`nvml-mock-fgo-demo`) and never touches your current context.
-- [Helm 3.8 or newer](https://helm.sh/docs/intro/install/) — the chart is served
-  from an OCI registry.
+- [Docker](https://docs.docker.com/get-started/get-docker/) 和 [Kind](https://kind.sigs.k8s.io/)——本指南会创建自己的集群 `nvml-mock-fgo-demo`，不会动你当前的 context。
+- [Helm 3.8 或更高版本](https://helm.sh/docs/intro/install/)——chart 托管在 OCI 仓库。
 - [kubectl](https://kubernetes.io/docs/reference/kubectl/)
-- A clone of this repository, for the Kind topology file.
+- 克隆好的本仓库，需要用到里面的 Kind 拓扑文件。
 
-Takes about 10 minutes.
+全程约 10 分钟。
 
-## Step 1 — Create a cluster
+## 第 1 步 — 创建集群
 
-The topology labels one worker `integration` and two `scale`. Without those
-labels Helm installs successfully and produces no pods for the missing pool.
+拓扑文件会给 1 个 worker 打 `integration` 标签、给 2 个打 `scale` 标签。少了这些标签，Helm 依然会「安装成功」，但对应节点池不会有任何 Pod。
 
 ```bash
 kind create cluster --name nvml-mock-fgo-demo --config=docs/guides/kind.yaml
 ```
 
-## Step 2 — Install Mokka on the integration pool
+## 第 2 步 — 在 integration 节点池安装 Mokka
 
-The ConfigMaps carry FGO's namespace in their own metadata, so that namespace
-has to exist before Mokka writes them:
+这些 ConfigMap 的 metadata 里带着 FGO 的命名空间，所以那个命名空间必须先存在，Mokka 才能往里写：
 
 ```bash
 kubectl --context kind-nvml-mock-fgo-demo create namespace gpu-operator
@@ -96,12 +75,12 @@ helm install nvml-mock oci://ghcr.io/nvidia/k8s-test-infra/chart/nvml-mock \
   --wait --timeout 120s
 ```
 
-`integrations.fakeGpuOperator.enabled=true` is what emits the profile
-ConfigMaps in the shape FGO's loader reads. `targetNamespace` puts them where
-it reads: without it they land in Mokka's release namespace, which FGO never
-looks in.
+`integrations.fakeGpuOperator.enabled=true` 负责按 FGO 加载器能读懂的格式生成 profile ConfigMap
 
-## Step 3 — Install FGO on the scale pool
+!!! note "国内镜像拉取"
+    本指南会从 `ghcr.io`（nvml-mock、fake-gpu-operator）拉取镜像。若这些镜像源拉取缓慢或超时，可给相关 chart 的镜像加私有仓库前缀（如给 `nvml-mock` 加 `--set global.imageRegistry=harbor.heilansc.com/ghcr.io`）。具体做法与示例见[国内镜像加速](../README.md#domestic-mirror)。；`targetNamespace` 把它们放到 FGO 会去读的位置——不设的话，ConfigMap 会落在 Mokka 自己的 release 命名空间里，而 FGO 根本不看那里。
+
+## 第 3 步 — 在 scale 节点池安装 FGO
 
 ```bash
 helm upgrade --install gpu-operator \
@@ -123,64 +102,56 @@ topology:
 EOF
 ```
 
-`backend: mock` hands the pool to Mokka; `backend: fake` keeps it on FGO's own
-shim. `builtinProfiles.enabled=false` is what lets this install succeed at all
-now that Mokka owns those eight ConfigMap names — see
-[the discovery contract](#the-discovery-contract).
+`backend: mock` 表示这个节点池交给 Mokka，`backend: fake` 表示继续用 FGO 自带的垫片。如今这 8 个 ConfigMap 名字已归 Mokka 所有，只有加上 `builtinProfiles.enabled=false` 这次安装才装得上，参见[发现契约](#the-discovery-contract)。
 
-## Step 4 — Verify
+## 第 4 步 — 验证
 
 ```bash
 CTX=kind-nvml-mock-fgo-demo
 
-# Mokka runs only on the integration worker.
+# Mokka 只跑在 integration worker 上。
 kubectl --context $CTX -n mokka get pods -l app.kubernetes.io/name=nvml-mock -o wide
 
-# The profile ConfigMaps exist, in the namespace FGO reads.
+# profile ConfigMap 存在于 FGO 会去读的命名空间里。
 kubectl --context $CTX -n gpu-operator get cm -l fake-gpu-operator/gpu-profile=true
 
-# A real nvidia-smi, on a node with no GPU.
+# 在一台没有 GPU 的节点上跑真正的 nvidia-smi。
 kubectl --context $CTX -n mokka exec ds/nvml-mock -- nvidia-smi
 
-# FGO's component-specific pods run in its release namespace.
+# FGO 各组件的 Pod 跑在它自己的 release 命名空间里。
 kubectl --context "$CTX" -n gpu-operator get pods -o wide
 ```
 
-You should end up with:
+最终应该得到这样的结果：
 
-| Node   | Pool          | Backend | GPUs come from | Mokka DaemonSet |
-|--------|---------------|---------|----------------|-----------------|
-| worker | `integration` | `mock`  | Mokka          | yes             |
-| worker | `scale`       | `fake`  | FGO            | no              |
+| 节点 | 节点池 | Backend | GPU 来自 | Mokka DaemonSet |
+|---|---|---|---|---|
+| worker | `integration` | `mock` | Mokka | 有 |
+| worker | `scale` | `fake` | FGO | 无 |
 
-## When FGO does not pick up the profiles
+## FGO 没读到 profile 时
 
-Check the name and namespace, not the label — the label is not on FGO's load
-path:
+先查**名字和命名空间**，别去查标签——标签不在 FGO 的加载路径上：
 
 ```bash
 kubectl get cm gpu-profile-h100 -n gpu-operator -o name
 ```
 
-A `NotFound` means one of three things: the ConfigMaps are still in Mokka's
-namespace (set `targetNamespace`), the name is wrong, or the install hit the
-ownership error above. If the ConfigMap exists, confirm the body is under
-`profile.yaml`:
+返回 `NotFound` 无非三种原因：ConfigMap 还留在 Mokka 的命名空间里（补上 `targetNamespace`）、名字写错了，或者安装时撞上了前面说的所有权错误。如果 ConfigMap 存在，再确认内容确实放在 `profile.yaml` 这个 key 下：
 
 ```bash
 kubectl get cm gpu-profile-h100 -n gpu-operator -o jsonpath='{.data.profile\.yaml}' | head -5
 ```
 
-Restart FGO's controller after fixing any of these:
+修好任意一项后，重启 FGO 的 controller：
 
 ```bash
 kubectl rollout restart deployment fake-gpu-operator -n gpu-operator
 ```
 
-## Custom labels on the ConfigMaps
+## 给 ConfigMap 加自定义标签
 
-`profileLabels` adds labels but cannot remove the contract ones, so an override
-here cannot break discovery:
+`profileLabels` 只能**新增**标签，删不掉契约要求的那些，所以在这里做覆盖不会破坏发现流程：
 
 ```yaml
 integrations:
@@ -190,16 +161,16 @@ integrations:
       my-org/custom-label: "gpu-sim"
 ```
 
-## Clean up
+## 清理
 
 ```bash
 kind delete cluster --name nvml-mock-fgo-demo
 ```
 
-## Related
+## 延伸阅读
 
-| To read about | See |
+| 想了解 | 参见 |
 |---|---|
-| Every chart value | [Installation](../../helm-chart.md) |
-| What a profile defines | [Configuration](../../configuration.md) |
-| Mokka on its own | [Quick Start](../../quickstart.md) |
+| 全部 chart 配置项 | [安装](../../helm-chart.md) |
+| 一个配置档定义了什么 | [配置](../../configuration.md) |
+| 单独使用 Mokka | [快速入门](../../quickstart.md) |

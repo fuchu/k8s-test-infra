@@ -1,29 +1,18 @@
-# Command-Line Tools
+# 命令行工具
 
-Besides the mock libraries, Mokka ships a set of small binaries under `cmd/`.
-Three of the four below are workloads the chart runs for you; only
-`nvml-mock-ctl` is meant to be invoked by hand.
+除了模拟库之外，Mokka 还在 `cmd/` 下提供了一组小型工具二进制。下面四个里，有三个是 chart 替你跑的工作负载；只有 `nvml-mock-ctl` 是设计来手动调用的。
 
-| Component | Purpose |
+| 组件 | 用途 |
 |------|---------|
-| [`node-agent`](node-agent.md) | Compiles a mock NVML profile into on-host state and keeps it reconciled. The process the nvml-mock DaemonSet runs. |
-| [`nri-plugin`](nri-plugin.md) | containerd NRI plugin that injects the mock driver overlay, LD_PRELOAD shims and device nodes into containers at creation time. |
-| [`control-plane`](control-plane.md) | Runs the [Mokka control plane](../control-plane.md) and serves liveness and controller-readiness probes. |
-| [`nvml-mock-ctl`](../nvml-mock-ctl.md) | Mutate the simulated GPU state of a running node without a restart. |
+| [`node-agent`](node-agent.md) | 把模拟的 NVML 配置档编译成宿主机上的状态并持续对齐。即 nvml-mock DaemonSet 运行的进程。 |
+| [`nri-plugin`](nri-plugin.md) | containerd 的 NRI 插件，在容器创建时把模拟驱动覆盖层、LD_PRELOAD 垫片和设备节点注入容器。 |
+| [`control-plane`](control-plane.md) | 运行 [Mokka 控制面](../control-plane.md)，并响应存活探针与控制器就绪探针。 |
+| [`nvml-mock-ctl`](../nvml-mock-ctl.md) | 无需重启即可修改运行中节点的模拟 GPU 状态。 |
 
-Three more are documented under [Contributing](../contributing/index.md):
-[`check-fabric`](check-fabric.md), which prints the NVLink fabric identity
-(cluster UUID, clique ID, state) of every visible GPU,
-[`generate-bridge`](generate-bridge.md), which generates the mock NVML bridge
-stubs, and [`mokka-capture`](mokka-capture.md), which captures a real GPU node
-and scrubs the capture for the repository.
+另外三个在[贡献指南](../contributing/index.md)下记录：[`check-fabric`](check-fabric.md) 打印每块可见 GPU 的 NVLink 交换网身份（cluster UUID、clique ID、状态），[`generate-bridge`](generate-bridge.md) 生成模拟 NVML 的桥接桩代码，[`mokka-capture`](mokka-capture.md) 采集真实 GPU 节点并为仓库脱敏。
 
-## Building
+## 构建
 
-`make build` compiles every `cmd/*/main.go` into `dist/`, then does the same for
-the Go shims under `shims/`.
+`make build` 会把每个 `cmd/*/main.go` 编译进 `dist/`，然后对 `shims/` 下的 Go 垫片做同样的事。
 
-The nvml-mock image installs four of these under `/usr/local/bin`: `node-agent`,
-`nri-plugin`, `nvml-mock-ctl` and `check-fabric`. `control-plane` has an image
-of its own, built from `deployments/control-plane/Dockerfile`, and
-`generate-bridge` and `mokka-capture` are developer tools that ship in neither.
+nvml-mock 镜像在 `/usr/local/bin` 下安装其中四个：`node-agent`、`nri-plugin`、`nvml-mock-ctl` 和 `check-fabric`。`control-plane` 有自己单独的镜像，由 `deployments/control-plane/Dockerfile` 构建；`generate-bridge` 与 `mokka-capture` 是开发者工具，两者都不随镜像发布。
