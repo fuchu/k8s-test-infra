@@ -1,22 +1,18 @@
 # NVIDIA Device Plugin
 
-Advertise mock GPUs as `nvidia.com/gpu` allocatable resources, then schedule a
-workload that requests one.
+把模拟 GPU 作为 `nvidia.com/gpu` 可分配资源通告出去，然后调度一个请求 GPU 的工作负载。
 
-This is the simplest way to make Kubernetes itself believe a node has GPUs. The
-real NVIDIA device plugin runs unmodified — it discovers devices through NVML,
-and Mokka is what answers.
+这是让 Kubernetes 自身相信节点有 GPU 的最简单方式。真实的 NVIDIA device plugin 未经修改地运行——它通过 NVML 发现设备，而应答它的是 Mokka。
 
-## Prerequisites
+## 前置条件
 
-- [Docker](https://docs.docker.com/get-started/get-docker/) and
-  [Kind](https://kind.sigs.k8s.io/)
-- [Helm 3.8 or newer](https://helm.sh/docs/intro/install/)
+- [Docker](https://docs.docker.com/get-started/get-docker/) 和 [Kind](https://kind.sigs.k8s.io/)
+- [Helm 3.8 或更新版本](https://helm.sh/docs/intro/install/)
 - [kubectl](https://kubernetes.io/docs/reference/kubectl/)
 
-Takes about 5 minutes.
+约需 5 分钟。
 
-## Step 1 — Create a cluster and install Mokka
+## 第 1 步——创建集群并安装 Mokka
 
 ```bash
 kind create cluster --name mokka-device-plugin
@@ -26,16 +22,15 @@ helm install nvml-mock oci://ghcr.io/nvidia/k8s-test-infra/chart/nvml-mock \
   --wait --timeout 120s
 ```
 
-## Step 2 — Label the node
+## 第 2 步——给节点打标签
 
-The device plugin manifest below targets the simulated-GPU node pool, so the
-node has to carry that label:
+下面的 device plugin 清单针对模拟 GPU 节点池，因此节点必须带有该标签：
 
 ```bash
 kubectl label node --all mokka.nvidia.com/type=sgpu
 ```
 
-## Step 3 — Deploy the device plugin
+## 第 3 步——部署 device plugin
 
 ```bash
 kubectl apply -f - <<'EOF'
@@ -86,13 +81,13 @@ kubectl -n kube-system wait --for=condition=ready \
   pod -l name=nvidia-device-plugin-mock --timeout=120s
 ```
 
-| Argument | Why |
+| 参数 | 原因 |
 |---|---|
-| `--nvidia-driver-root`, `--driver-root-ctr-path` | Point the plugin at Mokka's staged tree instead of a real driver root |
-| `--device-discovery-strategy=nvml` | Discover through NVML, which is the interface Mokka implements |
-| `--pass-device-specs=true` | Deliver the device nodes into the container. Required for Mokka's [NRI plugin](../components/nri-plugin.md#recognising-a-gpu-allocation) to recognise the allocation |
+| `--nvidia-driver-root`、`--driver-root-ctr-path` | 把插件指向 Mokka 部署好的目录树，而不是真实驱动根目录 |
+| `--device-discovery-strategy=nvml` | 通过 NVML 发现，这正是 Mokka 实现的接口 |
+| `--pass-device-specs=true` | 把设备节点交付进容器。Mokka 的 [NRI 插件](../components/nri-plugin.md#recognising-a-gpu-allocation)需要它才能识别分配 |
 
-## Step 4 — Verify allocatable GPUs
+## 第 4 步——验证可分配 GPU
 
 ```bash
 kubectl wait \
@@ -104,14 +99,11 @@ kubectl get nodes -o custom-columns='NODE:.metadata.name,GPUS:.status.allocatabl
 # mokka-device-plugin-control-plane   4
 ```
 
-Pod readiness only confirms that the device-plugin process is running. Kubelet
-registration and the node-status update happen asynchronously, so wait for the
-expected resource count before scheduling a GPU workload.
+Pod 就绪只确认 device plugin 进程在运行。kubelet 注册和节点状态更新是异步的，因此调度 GPU 工作负载前请等待预期资源数量出现。
 
-The count comes from the profile — `gb300` is the default and carries four
-devices.
+该数量来自 profile——`gb300` 是默认值，带四台设备。
 
-## Step 5 — Schedule a workload
+## 第 5 步——调度工作负载
 
 ```bash
 kubectl apply -f - <<'EOF'
@@ -134,13 +126,11 @@ kubectl wait --for=condition=ready pod/gpu-pod --timeout=120s
 kubectl get nodes -o custom-columns='NODE:.metadata.name,GPUS:.status.allocatable.nvidia\.com/gpu'
 ```
 
-The pod scheduling is the result: the kubelet accepted a GPU request on a node
-that has none, because the plugin allocated one of Mokka's.
+结果是 Pod 成功调度：尽管节点上根本没有 GPU，kubelet 仍接受了 GPU 请求，因为插件分配了 Mokka 的某块 GPU。
 
-## Different GPU models on different nodes
+## 不同节点使用不同 GPU 型号
 
-One release covers one node pool, so a heterogeneous fleet is just several
-releases that do not overlap. Start from a cluster with more than one worker:
+一个 release 覆盖一个节点池，因此异构机群就是几个互不重叠的 release。从一个有多个 worker 的集群开始：
 
 ```bash
 cat > kind-fleet.yaml <<'EOF'
@@ -160,7 +150,7 @@ kind create cluster --name mokka-fleet --config kind-fleet.yaml
 kubectl label node --all mokka.nvidia.com/type=sgpu
 ```
 
-Install one release per pool, each selecting its own nodes:
+每个池安装一个 release，各自选择自己的节点：
 
 ```bash
 helm install nvml-mock-a100 oci://ghcr.io/nvidia/k8s-test-infra/chart/nvml-mock \
@@ -174,7 +164,7 @@ helm install nvml-mock-t4 oci://ghcr.io/nvidia/k8s-test-infra/chart/nvml-mock \
   --set "nodeSelector.nvml-mock/profile=t4" --wait --timeout 120s
 ```
 
-Deploy the device plugin as in Step 3, and each worker reports its own count:
+像第 3 步那样部署 device plugin，每个 worker 都会报告自己的数量：
 
 ```bash
 kubectl wait \
@@ -188,48 +178,37 @@ kubectl get nodes -l nvml-mock/profile \
   -o custom-columns='NODE:.metadata.name,GPUS:.status.allocatable.nvidia\.com/gpu'
 ```
 
-!!! warning "The `nodeSelector` is what keeps the pools apart"
+!!! warning "`nodeSelector` 才是让各池彼此隔离的关键"
 
-    The chart's hostPath mounts — `/var/lib/nvml-mock`, `/var/run/cdi`,
-    `/run/nvidia` and the NFD features directory — are the same for every
-    release, and the DaemonSet tolerates every taint. Drop the `nodeSelector`
-    and both releases land on both workers and overwrite each other's per-node
-    state. A node belongs to exactly one pool.
+    chart 的 hostPath 挂载——`/var/lib/nvml-mock`、`/var/run/cdi`、`/run/nvidia` 和 NFD features 目录——对每个 release 都相同，而且 DaemonSet 容忍所有 taint。去掉 `nodeSelector` 后，两个 release 都会落到两个 worker 上，并覆盖彼此的逐节点状态。一个节点只能属于一个池。
 
-## Node labels
+## 节点标签
 
-The device plugin advertises the resource, but it does not label the node.
-Labels under `nvidia.com/` come from Node Feature Discovery and GPU Feature
-Discovery, exactly as on real hardware — see the
-[GPU Operator guide](gpu-operator.md), which deploys both.
+device plugin 通告资源，但不给节点打标签。`nvidia.com/` 下的标签来自 Node Feature Discovery 和 GPU Feature Discovery，与真实硬件完全一样——参见 [GPU Operator 指南](gpu-operator.md)，它会部署这两者。
 
-## Troubleshooting
+## 排障
 
-**Allocatable stays at zero.** The plugin is running but found no devices.
-Check its logs for an NVML error, and confirm Mokka staged the driver root:
+**可分配数量始终为零。** 插件在运行但没发现设备。检查其日志中的 NVML 错误，并确认 Mokka 已部署驱动根目录：
 
 ```bash
 kubectl -n kube-system logs -l name=nvidia-device-plugin-mock --tail=30
 ```
 
-**The plugin pod is `Pending`.** The node is missing
-`mokka.nvidia.com/type=sgpu`.
+**插件 Pod 处于 `Pending`。** 节点缺少 `mokka.nvidia.com/type=sgpu` 标签。
 
-**A pod requesting one GPU sees all of them.** The NRI plugin is also injecting.
-`--pass-device-specs=true` is what lets Mokka's plugin detect the allocation and
-stand down — see [NRI Plugin](../components/nri-plugin.md).
+**请求一块 GPU 的 Pod 却看到了所有 GPU。** NRI 插件也在注入。`--pass-device-specs=true` 让 Mokka 的插件能检测到分配并让位——参见 [NRI 插件](../components/nri-plugin.md)。
 
-## Clean up
+## 清理
 
 ```bash
 kind delete cluster --name mokka-device-plugin
 ```
 
-## Related
+## 相关链接
 
-| To read about | See |
+| 想了解 | 参见 |
 |---|---|
-| Every chart value | [Installation](../helm-chart.md) |
-| Node labelling and the full operand stack | [NVIDIA GPU Operator](gpu-operator.md) |
-| Claim-based allocation instead of counters | [NVIDIA DRA Driver](dra.md) |
-| GPUs without a resource request | [The `devices` annotation](../components/nri-plugin.md#which-containers-are-injected) |
+| 所有 chart 取值 | [安装](../helm-chart.md) |
+| 节点标签与完整 operand 技术栈 | [NVIDIA GPU Operator](gpu-operator.md) |
+| 用 claim 代替计数器进行分配 | [NVIDIA DRA Driver](dra.md) |
+| 无资源请求也能获得 GPU | [`devices` 注解](../components/nri-plugin.md#which-containers-are-injected) |

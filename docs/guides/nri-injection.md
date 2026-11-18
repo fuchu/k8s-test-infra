@@ -1,45 +1,27 @@
-# Set Up NRI Injection
+# 配置 NRI 注入
 
-Mokka's [NRI plugin](../components/nri-plugin.md) is how a workload that was
-given GPUs the usual way runs `nvidia-smi` and loads the mock NVML library, with
-no Mokka-specific pod spec changes. The chart runs it by default. This page
-covers what a device plugin needs for it, how to check that the plugin injects,
-and how to keep workloads out.
+Mokka 的 [NRI 插件](../components/nri-plugin.md)让按常规方式获得 GPU 的工作负载无需修改 Pod spec 以适配 Mokka，就能运行 `nvidia-smi` 并加载模拟 NVML 库。chart 默认运行它。本页介绍 device plugin 需要哪些条件、如何检查插件是否注入，以及如何让某些工作负载排除在外。
 
-## What the plugin does
+## 插件做什么
 
-The plugin runs as the `nvml-mock-nri` container in the node DaemonSet. As each
-container is created, it adds the mock driver to the ones that should have it:
+插件作为 `nvml-mock-nri` 容器运行在节点 DaemonSet 中。每个容器创建时，它把模拟驱动加到应该拥有它的容器上：
 
-- A container holding a GPU allocation from the NVIDIA device plugin or the
-  NVIDIA DRA driver gets the mock driver and keeps exactly its allocated GPUs.
-- A pod annotated `nvml-mock.nvidia.com/devices: "true"`, such as a node-wide
-  monitoring agent, gets every mock GPU on the node without a GPU request.
-- InfiniBand and IMEX channels are selected separately, each by its own
-  annotation.
-- Every other container is left exactly as authored.
+- 持有来自 NVIDIA device plugin 或 NVIDIA DRA driver 的 GPU 分配的容器，会获得模拟驱动，并且只保留分配给它的 GPU。
+- 带有 `nvml-mock.nvidia.com/devices: "true"` 注解的 Pod（例如节点级监控 agent），无需 GPU 请求即可获得节点上所有模拟 GPU。
+- InfiniBand 和 IMEX 通道分别通过各自的注解单独选择。
+- 其他容器完全保持作者原本的写法。
 
-[Which containers are injected](../components/nri-plugin.md#which-containers-are-injected)
-holds the full rules, and [Annotations](../components/nri-plugin.md#annotations)
-lists every annotation.
+完整规则见[哪些容器会被注入](../components/nri-plugin.md#which-containers-are-injected)，所有注解见[注解](../components/nri-plugin.md#annotations)。
 
-## Prerequisites
+## 前置条件
 
-The nodes need nothing for the plugin itself: the node daemon turns NRI on in
-containerd as part of its
-[container runtime setup](../components/node-daemon.md#container-runtime-setup).
+插件本身对节点没有额外要求：节点守护进程会在其[容器运行时设置](../components/node-daemon.md#container-runtime-setup)中打开 containerd 的 NRI。
 
-The NVIDIA device plugin needs `--pass-device-specs=true` or the `cdi-cri`
-device list strategy, which the GPU Operator uses with CDI enabled. With
-neither, the allocation leaves nothing in the container the plugin can
-recognize; see
-[Recognising a GPU allocation](../components/nri-plugin.md#recognising-a-gpu-allocation).
+NVIDIA device plugin 需要 `--pass-device-specs=true` 或 `cdi-cri` 设备列表策略——GPU Operator 在启用 CDI 时使用的就是后者。两者都没有时，分配不会在容器中留下插件可识别的内容；参见[识别 GPU 分配](../components/nri-plugin.md#recognising-a-gpu-allocation)。
 
-## Install Mokka
+## 安装 Mokka
 
-Install Mokka into its own namespace. The plugin never injects its own release
-namespace or `kube-system`, so installing into a shared namespace would leave
-that namespace's workloads without the mock.
+把 Mokka 安装到自己的命名空间。插件从不注入自己的 release 命名空间或 `kube-system`，因此安装到共享命名空间会让该命名空间的工作负载得不到模拟驱动。
 
 ```bash
 helm install nvml-mock oci://ghcr.io/nvidia/k8s-test-infra/chart/nvml-mock \
@@ -47,32 +29,22 @@ helm install nvml-mock oci://ghcr.io/nvidia/k8s-test-infra/chart/nvml-mock \
   --wait --timeout 180s
 ```
 
-An existing release turns NRI on at its next `helm upgrade`. Upgrade from a
-0.4.x chart without `--reuse-values`, which renders that release's values,
-including `nri.enabled=false` and its image tag. `--reset-then-reuse-values`
-(Helm 3.14+) keeps your own overrides instead.
+已有的 release 会在下次 `helm upgrade` 时开启 NRI。从 0.4.x chart 升级时不要使用 `--reuse-values`，它会渲染该 release 的取值，包括 `nri.enabled=false` 及其镜像 tag。`--reset-then-reuse-values`（Helm 3.14+）则会保留你自己的覆盖值。
 
-Each node pod runs the NRI plugin next to the node agent, and is Ready only
-once the plugin has registered with containerd:
+每个节点 Pod 都会在节点 agent 旁运行 NRI 插件，且只有插件向 containerd 注册后才变为 Ready：
 
 ```bash
 kubectl -n mokka get pods -l app.kubernetes.io/name=nvml-mock \
   -o custom-columns='POD:.metadata.name,NODE:.spec.nodeName,READY:.status.conditions[?(@.type=="Ready")].status,INIT:.spec.initContainers[*].name,CONTAINERS:.spec.containers[*].name'
 ```
 
-On Kubernetes 1.29 and later the node agent is listed under `INIT`, as a
-restartable init container, and `nvml-mock-nri` under `CONTAINERS`; see
-[NRI pod lifecycle](../helm-chart.md#nri-pod-lifecycle). On older clusters,
-or with `nri.nativeSidecar=false`, both are under `CONTAINERS`.
+在 Kubernetes 1.29 及以后，节点 agent 作为可重启的 init 容器列在 `INIT` 下，`nvml-mock-nri` 列在 `CONTAINERS` 下；参见 [NRI Pod 生命周期](../helm-chart.md#nri-pod-lifecycle)。在更旧的集群上，或设置 `nri.nativeSidecar=false` 时，两者都列在 `CONTAINERS` 下。
 
-A node pod that stays NotReady, with `nvml-mock-nri` crash-looping, means
-containerd on that node has NRI disabled; see
-[Troubleshooting](../troubleshooting.md#the-node-pod-is-notready-and-nvml-mock-nri-crash-loops).
+节点 Pod 一直 NotReady、`nvml-mock-nri` 不断 crash-loop，说明该节点上的 containerd 禁用了 NRI；参见[排障](../troubleshooting.md#the-node-pod-is-notready-and-nvml-mock-nri-crash-loops)。
 
-## Verify injection
+## 验证注入
 
-Run a pod that opts in with the `devices` annotation, so the check needs no GPU
-consumer:
+运行一个通过 `devices` 注解显式加入的 Pod，这样检查就不需要 GPU 消费者：
 
 ```bash
 kubectl -n default apply -f - <<'EOF'
@@ -94,33 +66,24 @@ kubectl -n default wait --for=condition=ready pod/nri-check --timeout=120s
 kubectl -n default exec nri-check -- nvidia-smi -L
 ```
 
-The image is debian because the injected `nvidia-smi` is a glibc binary: a musl
-image such as `busybox` or `alpine` cannot run it. `nvidia-smi -L` lists every mock GPU on the node. A pod without the annotation
-and without a GPU request sees none, as on a real GPU node.
+镜像选用 debian，因为注入的 `nvidia-smi` 是 glibc 二进制：musl 镜像（如 `busybox` 或 `alpine`）无法运行它。`nvidia-smi -L` 会列出节点上所有模拟 GPU。没有注解也没有 GPU 请求的 Pod 看不到任何 GPU，与真实 GPU 节点一样。
 
-To check the allocation path, schedule a GPU request through the
-[device plugin](device-plugin.md) or a ResourceClaim through the
-[DRA driver](dra.md) on a debian-based image: `nvidia-smi -L` in that pod lists
-only the GPUs it was allocated.
+要检查分配路径，请在基于 debian 的镜像上通过 [device plugin](device-plugin.md) 调度一个 GPU 请求，或通过 [DRA driver](dra.md) 创建一个 ResourceClaim：该 Pod 中的 `nvidia-smi -L` 只列出分配给它的 GPU。
 
 ```bash
 kubectl -n default delete pod nri-check
 ```
 
-## Keep a workload out
+## 让工作负载排除在外
 
-| To | Do |
+| 目标 | 做法 |
 |---|---|
-| Skip one pod | Annotate it `nvml-mock.nvidia.com/inject: "false"` |
-| Skip a namespace | Add it to `nri.excludedNamespaces` |
-| Turn the plugin off | `helm upgrade nvml-mock ... -n mokka --reuse-values --set nri.enabled=false` |
+| 跳过某个 Pod | 给它加注解 `nvml-mock.nvidia.com/inject: "false"` |
+| 跳过某个命名空间 | 把它加入 `nri.excludedNamespaces` |
+| 关闭插件 | `helm upgrade nvml-mock ... -n mokka --reuse-values --set nri.enabled=false` |
 
-Turning the plugin off affects only containers created afterwards. Running
-containers keep what they were given until they restart.
+关闭插件只影响之后创建的容器。运行中的容器会保留已有内容，直到重启。
 
-## When it does not inject
+## 何时不注入
 
-The plugin fails open: if it cannot inject, the container starts without the
-mock rather than failing. Start with
-[A pod gets no mock GPUs even though NRI is enabled](../troubleshooting.md#a-pod-gets-no-mock-gpus-even-though-nri-is-enabled),
-then [NRI plugin failure modes](../helm-chart.md#nri-plugin-failure-modes).
+插件采用 fail-open：如果无法注入，容器会不带模拟驱动启动，而不是失败。排查请从[启用了 NRI 但 Pod 得不到模拟 GPU](../troubleshooting.md#a-pod-gets-no-mock-gpus-even-though-nri-is-enabled)开始，然后是 [NRI 插件失败模式](../helm-chart.md#nri-plugin-failure-modes)。

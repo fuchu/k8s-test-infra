@@ -1,6 +1,6 @@
 # MIG 切分
 
-多实例 GPU（MIG）能把一块物理 GPU 拆成几个互相隔离的分区。Mokka 在驱动层面模拟了这次拆分，因此 `nvidia-smi mig` 的行为和对着真实驱动时一样，NVIDIA device plugin 也无需任何改动就能跑。整个过程不涉及真的 A100、H100 或 B200。
+多实例 GPU（MIG）能把一块物理 GPU 拆成几个互相隔离的分区。Mokka 在驱动层面模拟了这次拆分，因此 `nvidia-smi mig` 的行为和对着真实驱动时一样。NVIDIA device plugin 也无需任何改动就能跑。整个过程不涉及真的 A100、H100 或 B200。
 
 人们说「把一块卡切开」时，其实指的是两件不同的事，二者不能混用：
 
@@ -13,11 +13,11 @@
 
 !!! warning "节点启动时是什么布局，就只能分配什么布局"
 
-    device plugin 是依据「驱动能力面」来分配的，而这份能力面由 Mokka 在 `nvml-mock` Pod 启动时准备一次。运行时重新切分只会改变它下面的 NVML 视图，不会改变这份能力面，所以用 `nvidia-smi` 新建的分区**看得见、但分配不了**。如果你打算往上调度东西，请在安装时就把布局定好。
+    device plugin 依据「驱动能力面」来分配，而 Mokka 在 `nvml-mock` Pod 启动时只准备一次这份能力面。运行时重新切分只会改变底层的 NVML 视图，不会改变这份能力面，所以用 `nvidia-smi` 新建的分区**看得见、但分配不了**。如果你打算往上调度东西，请在安装时就把布局定好。
 
 ## 安装时切分
 
-每次启用 MIG 都要明确给出布局。只写 `gpu.mig.enabled=true` 会被拒绝，因为「怎么切一块卡」是部署决策，不是芯片本身的属性；而且一块支持 MIG 的卡如果开了 MIG 却不给布局，就一个 GPU 资源都不会发布出来。
+每次启用 MIG 都要明确给出布局。只写 `gpu.mig.enabled=true`，chart 会直接拒绝，因为「怎么切一块卡」是部署决策，不是芯片本身的属性；而且一块支持 MIG 的卡如果开了 MIG 却不给布局，就一个 GPU 资源都不会发布出来。
 
 ```bash
 helm install nvml-mock oci://ghcr.io/nvidia/k8s-test-infra/chart/nvml-mock \
@@ -37,7 +37,7 @@ helm install nvml-mock oci://ghcr.io/nvidia/k8s-test-infra/chart/nvml-mock \
 
 用最小的切片把一块板子填满，所有分区就会共用同一个规格名——这正是 device plugin 的 `migStrategy=single` 所要求的：
 
-| 配置档 | 最小切片 | 每块板的实例数 |
+| profile | 最小切片 | 每块板的实例数 |
 |---|---|---|
 | `a100` | `1g.5gb` | 7 |
 | `h100` | `1g.10gb` | 7 |
@@ -48,7 +48,7 @@ helm install nvml-mock oci://ghcr.io/nvidia/k8s-test-infra/chart/nvml-mock \
 
 `l40s` 和 `t4` 不支持切分。chart 会拒绝对它们启用 MIG，NVML 也会像在真实硬件上一样返回 `NVML_ERROR_NOT_SUPPORTED`。
 
-每块板子支持的完整规格表（不只是最小切片）用 YAML 声明，每一行写明该分区的切片数、对外发布的 profile id、可放置位置和 compute instance。它是一份独立文档，由 chart 从专属的 ConfigMap 挂载进来；表结构以及引擎如何找到它，见 [`mig:` 参考](../../mig.md#declaring-the-profile-table)。如果某块板子的规格表没能送达，它就会以[「不支持 MIG」](../../mig.md#a-board-with-no-resolvable-table-is-not-mig-capable)的状态启动——支持 MIG 的板子却意外拒绝启用时，这是第一个要查的地方。
+每块板子支持的完整规格表（不只是最小切片）用 YAML 声明，每一行写明该分区的切片数、对外发布的 profile id、可放置位置和 compute instance。它是一份独立文档，chart 从专属的 ConfigMap 把它挂载进来；表结构以及引擎如何找到它，见 [`mig:` 参考](../../mig.md#declaring-the-profile-table)。如果某块板子的规格表没能送达，它就会以[「不支持 MIG」](../../mig.md#a-board-with-no-resolvable-table-is-not-mig-capable)的状态启动——支持 MIG 的板子却意外拒绝启用时，这是第一个要查的地方。
 
 混合布局和固定实例 id 的写法见 [MIG](../../mig.md)。
 
@@ -89,7 +89,7 @@ $SMI -i 0 -mig 0                   # 恢复成一整块 GPU
 
 `-i` 是**限定范围**，不是「先选中再操作」。省略它，命令就会作用于节点上的每一块 GPU——在 8 块板的节点上，`mig -dgi -gi 0` 会一次删掉 8 个分区，而不是 1 个。
 
-每次变更都会被记录下来，因此它不会随着发出命令的 `nvidia-smi` 进程退出而消失，并会在一个 TTL 周期内同步给节点上的其他消费方。正因为每个进程都有自己独立的引擎，这份记录才让分区对**另一个** `nvidia-smi`、对 DCGM、对 GFD 都可见。如果某次变更无法被记录，调用会直接以 `NVML_ERROR_NO_PERMISSION` 失败，而不是「只在一个进程里生效」——真实驱动在权限不足时也是这么报的。
+模拟层会记录每次变更，因此变更不会随着发出命令的 `nvidia-smi` 进程退出而消失，并会在一个 TTL 周期内同步给节点上的其他消费方。正因为每个进程都有自己独立的引擎，这份记录才让分区对**另一个** `nvidia-smi`、对 DCGM、对 GFD 都可见。如果某次变更无法被记录，调用会直接以 `NVML_ERROR_NO_PERMISSION` 失败，而不是「只在一个进程里生效」——真实驱动在权限不足时也是这么报的。
 
 `nvml-mock-ctl status` 可以查看已记录的布局，`nvml-mock-ctl reset` 可以清空它。这里刻意没有提供 `nvml-mock-ctl mig`：那相当于给 `nvidia-smi` 已有的接口再造一套非标准写法，还会变成同一份状态的第二个写入方。
 
@@ -101,18 +101,18 @@ $SMI -i 0 -mig 0                   # 恢复成一整块 GPU
 kubectl get nodes -o custom-columns='NODE:.metadata.name,GPUS:.status.allocatable.nvidia\.com/gpu'
 ```
 
-对插件之上的各层来说，真正重要的是这个形态变化：同样一句 `nvidia.com/gpu: 1`，现在买到的是七分之一块 H100；Pod 会在 `NVIDIA_VISIBLE_DEVICES` 里拿到某个分区的 `MIG-…` UUID，外加两个 `/dev/nvidia-caps` 设备节点（一个对应 GPU instance，一个对应 compute instance）——支持 MIG 的运行时正是靠它们来打开分区的。
+对插件之上的各层来说，真正重要的是这个形态变化：同样一句 `nvidia.com/gpu: 1`，现在买到的是七分之一块 H100。Pod 会在 `NVIDIA_VISIBLE_DEVICES` 里拿到某个分区的 `MIG-…` UUID，外加两个 `/dev/nvidia-caps` 设备节点（一个对应 GPU instance，一个对应 compute instance）——支持 MIG 的运行时正是靠它们来打开分区的。
 
 要做到这一点，需要按 [NVIDIA Device Plugin](../device-plugin.md) 部署 device plugin，并做两处调整：
 
 - 加 `--mig-strategy=single`，把所有分区都发布成 `nvidia.com/gpu`。如果节点上各分区的规格不统一，它会直接拒绝该节点，这也是前面要用同一种切片尺寸填满每块板子的原因。
 - 插件在构建设备映射时，会通过一个**硬编码的绝对路径** `/proc/driver/nvidia-caps/mig-minors` 解析 MIG 能力。读不到这个文件，插件就什么都不发布，而不会回退到整块 GPU。普通卷挂载也送不进去，因为 runc 拒绝任何目标位于 `/proc` 内的挂载。可行的办法是让一个特权容器把 Mokka 准备好的副本 bind-mount 到它自己的 `/proc/driver` 上。
 
-`tests/e2e/go/assets/device-plugin-mock-mig.yaml` 里保留了一份可正常工作的 DaemonSet，两件事都做了，也包含等待节点代理完成准备的逻辑。
+`tests/e2e/go/assets/device-plugin-mock-mig.yaml` 里保留了一份可正常工作的 DaemonSet，两件事都做了，也包含等待节点 agent 完成准备的逻辑。
 
 ## 切片是怎么命名的
 
-切片的名称表示它占**自己那块板子**的份额。项目内置的每个配置档都声明了 NVIDIA 命名时所依据的产品容量——`b200` 是 180 GiB、`gb200` 是 186、`gb300` 是 278——所以模拟层报出的名字和这些板子真实报出的一致。
+切片的名称表示它占**自己那块板子**的份额。项目内置的每个 profile 都声明了 NVIDIA 命名时所依据的产品容量——`b200` 是 180 GiB、`gb200` 是 186、`gb300` 是 278——所以模拟层报出的名字和这些板子真实报出的一致。
 
 某块板子接受哪些名字，请以 `nvidia-smi mig -lgip` 的输出为准，而不要查 NVIDIA 的 [Supported MIG Profiles](https://docs.nvidia.com/datacenter/tesla/mig-user-guide/latest/supported-mig-profiles.html)：那份文档没有 GB200 或 GB300 的表格。不过对于真实 A100、H100、B200 逐规格支持哪些 MIG profile，它仍是权威参考，内置表格也正是据此整理的。
 
@@ -120,7 +120,7 @@ kubectl get nodes -o custom-columns='NODE:.metadata.name,GPUS:.status.allocatabl
 
 ## 限制 <a id="limits"></a>
 
-运行时重新切分只改 NVML 视图。`/dev/nvidia-caps` 和 `mig-minors` 表都是在 `nvml-mock` Pod 启动时准备一次的，所以由重新切分产生的分区永远不可分配，放多久都没用。清掉覆盖配置后，NVML 会回到安装时的布局，GPU instance id 和 MIG UUID 也与之前一致——那些暂存文件本来就是按这组身份写的。
+运行时重新切分只改 NVML 视图。Mokka 在 `nvml-mock` Pod 启动时只准备一次 `/dev/nvidia-caps` 和 `mig-minors` 表，所以由重新切分产生的分区永远不可分配，放多久都没用。清掉覆盖配置后，NVML 会回到安装时的布局，GPU instance id 和 MIG UUID 也与之前一致——那些暂存文件本来就是按这组身份写的。
 
 项目不模拟 CUDA，因此 MIG 切片可以完成调度、Pod 也能被准入，但上面不会真的跑 kernel。
 
@@ -129,8 +129,8 @@ kubectl get nodes -o custom-columns='NODE:.metadata.name,GPUS:.status.allocatabl
 **`helm install` 报 `gpu.mig.gpuInstances` 没有声明任何分区。**
 说明只设了 `gpu.mig.enabled=true` 却没给布局，补上一个即可。
 
-**`helm install` 报该配置档不是支持 MIG 的板子。**
-该配置档没有声明 `mig.max_gpu_instances`；`l40s` 和 `t4` 无法切分。
+**`helm install` 报该 profile 不是支持 MIG 的板子。**
+该 profile 没有声明 `mig.max_gpu_instances`；`l40s` 和 `t4` 无法切分。
 
 **`nvidia-smi mig` 回答 `No MIG-enabled devices found`。**
 所有 GPU 的 MIG 都是关着的（安装时不给布局就是这个状态）。先用 `nvidia-smi -i 0 -mig 1` 启用。注意 MIG 状态是按节点算的：如果启用成功了、下一条命令却说没启用，说明两次调用打到了不同的 Pod 上。

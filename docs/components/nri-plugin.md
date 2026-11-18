@@ -1,286 +1,171 @@
-# NRI Plugin
+# NRI 插件
 
-The component that puts mock GPUs inside a container the pod author never
-changed.
+把模拟 GPU 放进 Pod 作者从未改动过的容器里的组件。
 
-The [node daemon](node-daemon.md) stages a GPU tree on the host, but a container
-sees only what its runtime gives it. Without help, a workload would need
-Mokka-specific pod spec changes — a `hostPath` mount, some `MOCK_*`
-environment. The NRI plugin removes that step: it registers with containerd's
-Node Resource Interface and edits containers as they are created, so a workload
-that was allocated GPUs the usual way comes up with the mock driver, unchanged.
+[节点守护进程](node-daemon.md)在宿主机上部署了一棵 GPU 目录树，但容器只能看到其运行时给它的东西。没有帮助时，工作负载需要针对 Mokka 修改 Pod spec——一个 `hostPath` 挂载、一些 `MOCK_*` 环境变量。NRI 插件消除了这一步：它向 containerd 的节点资源接口（NRI）注册，在容器创建时编辑容器，于是以常规方式获得 GPU 分配的工作负载无需改动就能带着模拟驱动启动。
 
-!!! note "What NRI is"
-    The **Node Resource Interface** is a framework for plugging extensions into
-    OCI-compatible container runtimes. A plugin registers with the runtime, is
-    notified as containers are created, and may make limited adjustments to a
-    container's OCI spec — mounts, devices, environment — before it starts.
+!!! note "什么是 NRI"
+    **节点资源接口（Node Resource Interface）**是把扩展插入 OCI 兼容容器运行时的框架。插件向运行时注册，在容器创建时得到通知，并可在容器启动前对其 OCI spec 做有限调整——挂载、设备、环境变量。
 
-    It sits *below* the Container Runtime Interface, so it is a runtime feature
-    rather than a Kubernetes API: there is no NRI object in the Kubernetes API
-    and nothing on kubernetes.io describing it. containerd 1.7 or later is
-    required. See the
-    [NRI project](https://github.com/containerd/nri) and
-    [containerd's NRI documentation](https://github.com/containerd/containerd/blob/main/docs/NRI.md).
+    它位于容器运行时接口（CRI）*之下*，因此是运行时特性而非 Kubernetes API：Kubernetes API 中没有 NRI 对象，kubernetes.io 上也没有相关描述。需要 containerd 1.7 或更新版本。参见 [NRI 项目](https://github.com/containerd/nri)和[containerd 的 NRI 文档](https://github.com/containerd/containerd/blob/main/docs/NRI.md)。
 
-For where it sits in the wider system, see the
-[architecture overview](../architecture.md).
+它在整个系统中的位置参见[架构概览](../architecture.md)。
 
-## Which containers are injected
+## 哪些容器会被注入
 
-The plugin injects only containers that were given GPUs or explicitly asked for
-a mock surface. Everything else on the node is left exactly as authored, just as
-a real GPU node gives nothing to a pod that requested no GPU.
+插件只注入那些被给予了 GPU 或明确请求了模拟接口面的容器。节点上其他一切保持作者原本的写法，就像真实 GPU 节点不会给未请求 GPU 的 Pod 任何东西。
 
-It makes three independent selections — GPU, InfiniBand and IMEX — and adds only
-the surfaces that were selected. None of them brings another along.
+它做三项彼此独立的选择——GPU、InfiniBand 和 IMEX——只添加被选中的接口面，三者互不连带。
 
-| Container | Receives |
+| 容器 | 获得 |
 |---|---|
-| Holds a GPU allocation from the device plugin or the NVIDIA DRA driver | The overlay with mock NVML active. The allocated GPUs stay exactly as the scheduler assigned them |
-| Pod annotated `nvml-mock.nvidia.com/devices: "true"`, no allocation | The overlay with mock NVML active, and every mock GPU on the node |
-| Pod annotated `nvml-mock.nvidia.com/infiniband: "true"` | The overlay with the mock InfiniBand tools active |
-| Pod annotated `nvml-mock.nvidia.com/imex-channels: "true"` | The mock IMEX channel nodes, and nothing else |
-| The DRA driver's `compute-domain-daemon` container, in a pod labeled `resource.nvidia.com/computeDomain` | `nvidia-imex.real`, only while staged, and nothing else |
-| Anything else | Nothing |
+| 持有来自 device plugin 或 NVIDIA DRA driver 的 GPU 分配 | 模拟 NVML 生效的覆盖层。分配到的 GPU 保持调度器所指派的原样 |
+| Pod 带注解 `nvml-mock.nvidia.com/devices: "true"`，无分配 | 模拟 NVML 生效的覆盖层，以及节点上所有模拟 GPU |
+| Pod 带注解 `nvml-mock.nvidia.com/infiniband: "true"` | 模拟 InfiniBand 工具生效的覆盖层 |
+| Pod 带注解 `nvml-mock.nvidia.com/imex-channels: "true"` | 模拟 IMEX 通道节点，别无其他 |
+| 位于带 `resource.nvidia.com/computeDomain` 标签的 Pod 中的 DRA driver `compute-domain-daemon` 容器 | `nvidia-imex.real`，仅在已部署时，别无其他 |
+| 其他 | 无 |
 
-A container that matches several rows gets each of their surfaces, except the
-ComputeDomain daemon, which gets only its own row.
+匹配多行的容器会获得各自所有的接口面，但 ComputeDomain daemon 例外，它只获得属于自己那一行的内容。
 
-The DRA driver delivers the daemon's driver footprint through its own CDI
-edits, `nvidia-imex` included, so the plugin adds only what a mock node needs
-on top: the real IMEX daemon that Mokka's `nvidia-imex` shim runs from beside
-itself. Without staged IMEX the daemon fails as it does on a real node without the
-IMEX package; the plugin never refuses the container.
+DRA driver 通过自身的 CDI 编辑交付 daemon 的驱动脚印，包括 `nvidia-imex`，因此插件只补上模拟节点额外需要的东西：Mokka 的 `nvidia-imex` shim，以及在它旁边运行的真正 IMEX daemon。没有已部署的 IMEX 时，daemon 会像在没有 IMEX 包的真实节点上一样失败；插件从不拒绝容器。
 
-The **overlay** is the mock driver tree mounted at `/opt/nvml-mock`, plus the
-`PATH`, `LD_LIBRARY_PATH` and `LD_PRELOAD` shims that point at it. The GPU and
-InfiniBand selections share it, because the InfiniBand tools and shims are
-staged beside the mock driver. The environment turns on only what was selected:
+**覆盖层**是挂载在 `/opt/nvml-mock` 的模拟驱动树，加上指向它的 `PATH`、`LD_LIBRARY_PATH` 和 `LD_PRELOAD` shim。GPU 和 InfiniBand 选择共享它，因为 InfiniBand 工具和 shim 与模拟驱动一起部署。环境变量只打开被选中的部分：
 
-| Selected | Environment |
+| 选中 | 环境变量 |
 |---|---|
-| GPU | `MOCK_NVML_CONFIG`, `MOCK_PCI_ROOT`, `GFD_MACHINE_TYPE_FILE` and, when staged, the ComputeDomain topology |
-| GPU, not InfiniBand | `MOCK_IB=off`, so the preloaded InfiniBand shims do nothing |
-| InfiniBand | `MOCK_IB=full`, `MOCK_IB_ROOT` and `MOCK_IB_PING_SOCKET` |
-| InfiniBand, not GPU | `MOCK_NVML_VISIBLE_DEVICES=none`, so the staged `nvidia-smi` reports no GPUs |
+| GPU | `MOCK_NVML_CONFIG`、`MOCK_PCI_ROOT`、`GFD_MACHINE_TYPE_FILE`，以及已部署时的 ComputeDomain 拓扑 |
+| GPU 而非 InfiniBand | `MOCK_IB=off`，使预加载的 InfiniBand shim 什么也不做 |
+| InfiniBand | `MOCK_IB=full`、`MOCK_IB_ROOT` 和 `MOCK_IB_PING_SOCKET` |
+| InfiniBand 而非 GPU | `MOCK_NVML_VISIBLE_DEVICES=none`，使部署好的 `nvidia-smi` 不报告任何 GPU |
 
-When the container already sets one of these variables, its own value wins,
-except against `MOCK_IB=off` and `MOCK_NVML_VISIBLE_DEVICES=none`: the
-annotations decide what a container gets, not an environment baked into its
-image.
+当容器已经设置了其中之一时，它自己的值胜出，但 `MOCK_IB=off` 和 `MOCK_NVML_VISIBLE_DEVICES=none` 例外：决定容器获得什么的是注解，而不是镜像里烘焙的环境变量。
 
-A process that loses `MOCK_NVML_CONFIG`, such as a Slurm job, which inherits
-the environment of whoever ran `srun`, still loads the node's profile from the
-overlay mount; see [how the library finds its configuration](../configuration.md#environment-variables).
-The shims' variables have no such fallback, so `libmockfs.so` is not loaded in
-that process.
+失去 `MOCK_NVML_CONFIG` 的进程——例如 Slurm 作业，它继承运行 `srun` 者的环境——仍会从覆盖层挂载中加载节点 profile；参见[库如何找到配置](../configuration.md#environment-variables)。shim 的变量没有这种回退，因此该进程中不会加载 `libmockfs.so`。
 
-The `devices` annotation is the management path: it gives a pod the whole node,
-such as a monitoring agent, without scheduler accounting. Like the other
-annotations, it applies to every container in the pod.
+`devices` 注解是管理路径：它给 Pod 整个节点，例如监控 agent，而不经过调度器记账。与其他注解一样，它作用于 Pod 中的所有容器。
 
-!!! note "Privileged pods and `NVIDIA_VISIBLE_DEVICES`"
-    On a real GPU node, a privileged container that requested no GPU sees every
-    GPU, and so does a container that sets `NVIDIA_VISIBLE_DEVICES=all` when the
-    NVIDIA container runtime handles it. The plugin injects neither: inherited
-    device nodes do not identify an allocation, and the plugin cannot tell which
-    runtime runs a container. Where the node runs the NVIDIA container runtime,
-    that runtime still acts on the variable. Otherwise, give such a pod the
-    `devices` annotation.
+!!! note "特权 Pod 与 `NVIDIA_VISIBLE_DEVICES`"
+    在真实 GPU 节点上，未请求 GPU 的特权容器能看到所有 GPU，设置了 `NVIDIA_VISIBLE_DEVICES=all` 的容器在 NVIDIA 容器运行时处理时也是如此。插件这两者都不注入：继承的设备节点不构成分配证据，插件也无法判断哪个运行时在处理容器。在节点运行 NVIDIA 容器运行时的地方，该运行时仍会对该变量起作用。否则，请给这样的 Pod 加上 `devices` 注解。
 
-## What happens to a container
+## 容器发生了什么
 
-Adjustment runs as a fixed sequence, and no step can fail:
+调整按固定顺序执行，任何一步都不能失败：
 
 ```mermaid
 flowchart TB
-    create[containerd: CreateContainer] --> skip{Opt-out annotation or<br/>excluded namespace?}
-    skip -->|yes| asis[Leave exactly as authored]
-    skip -->|no| cd{ComputeDomain<br/>daemon?}
-    cd -->|yes| daemon[nvidia-imex.real,<br/>when staged]
-    cd -->|no| gpu{GPU?}
-    cd -->|no| ib{infiniband<br/>annotation?}
-    cd -->|no| imex{imex-channels<br/>annotation?}
-    gpu -->|allocation| keep[Overlay, mock NVML;<br/>keep the allocated GPUs]
-    gpu -->|devices annotation,<br/>no allocation| all[Overlay, mock NVML +<br/>every mock GPU, raw or CDI]
-    ib -->|yes| fabric[Overlay, mock InfiniBand]
-    imex -->|yes| channels[IMEX channel nodes]
+    create[containerd: CreateContainer] --> skip{退出注解或<br/>被排除的命名空间?}
+    skip -->|是| asis[保持作者原样]
+    skip -->|否| cd{ComputeDomain<br/>daemon?}
+    cd -->|是| daemon[nvidia-imex.real,<br/>仅在已部署时]
+    cd -->|否| gpu{GPU?}
+    cd -->|否| ib{infiniband<br/>注解?}
+    cd -->|否| imex{imex-channels<br/>注解?}
+    gpu -->|分配| keep[覆盖层, 模拟 NVML;<br/>保留分配到的 GPU]
+    gpu -->|devices 注解,<br/>无分配| all[覆盖层, 模拟 NVML +<br/>所有模拟 GPU, raw 或 CDI]
+    ib -->|是| fabric[覆盖层, 模拟 InfiniBand]
+    imex -->|是| channels[IMEX 通道节点]
 ```
 
-When no branch selects anything, the container is left exactly as authored.
+没有任何分支选中任何内容时，容器保持作者原样。
 
-### When a container is left alone
+### 容器何时不被触碰
 
-Any of these leaves the container exactly as authored:
+以下任一情况都会让容器保持作者原样：
 
-- the pod carries `nvml-mock.nvidia.com/inject: "false"`;
-- its namespace is in the excluded list;
-- it holds no GPU allocation and carries none of the `devices`, `infiniband`
-  and `imex-channels` annotations;
-- it already mounts the overlay at the destination path.
+- Pod 带有 `nvml-mock.nvidia.com/inject: "false"`；
+- 其命名空间在排除列表中；
+- 它既没有 GPU 分配，也没有 `devices`、`infiniband` 和 `imex-channels` 注解中的任何一个；
+- 它已在目标路径挂载了覆盖层。
 
-That last check is what makes re-adjustment safe. A container that already has
-the overlay has been through here before, so re-running would double-apply.
+最后一项检查让重复调整变得安全。已经带有覆盖层的容器此前已经过这里，重跑会重复应用。
 
-## Recognising a GPU allocation
+## 识别 GPU 分配
 
-The kubelet applies a device plugin's or DRA driver's allocation before the
-runtime asks this plugin to adjust the container, so the allocation is visible
-in the incoming container spec. Only these count as evidence:
+kubelet 在运行时请求本插件调整容器之前，会应用 device plugin 或 DRA driver 的分配，因此分配在传入的容器 spec 中可见。只有以下内容算作证据：
 
-| Evidence | Produced by |
+| 证据 | 产生者 |
 |---|---|
-| A numbered `/dev/nvidiaN` character device **and** a cgroup rule allowing exactly that device | device plugin with `--pass-device-specs=true` |
-| A CDI device `k8s.device-plugin.nvidia.com/gpu=<id>` | device plugin with the `cdi-cri` device list strategy; `<id>` is the GPU UUID, or its index with `--device-id-strategy=index` |
-| A CDI device `k8s.gpu.nvidia.com/claim=<id>` | NVIDIA DRA driver |
+| 一个带编号的 `/dev/nvidiaN` 字符设备**并且**有一条恰好允许该设备的 cgroup 规则 | 使用 `--pass-device-specs=true` 的 device plugin |
+| 一个 CDI 设备 `k8s.device-plugin.nvidia.com/gpu=<id>` | 采用 `cdi-cri` 设备列表策略的 device plugin；`<id>` 是 GPU UUID，或使用 `--device-id-strategy=index` 时的索引 |
+| 一个 CDI 设备 `k8s.gpu.nvidia.com/claim=<id>` | NVIDIA DRA driver |
 
-The rules are strict so that a container is never mistaken for an allocated
-one:
+规则很严格，因此容器永远不会被误认为已分配：
 
-- A privileged container inherits every host device under a wildcard cgroup
-  rule. Its `/dev/nvidiaN` nodes were not allocated, so they do not count.
-- Control devices such as `/dev/nvidiactl` or `/dev/nvidia-uvm` accompany an
-  allocation but do not identify a GPU.
-- Other CDI kinds do not count. That includes the device plugin's
-  `k8s.device-plugin.nvidia.com/gdrcopy=all` and `…/mofed=all`, which come with
-  every allocation, the container toolkit's `nvidia.com/gpu`, and Mokka's own
-  `nvml-mock.nvidia.com/gpu=all`.
+- 特权容器在通配 cgroup 规则下继承所有宿主机设备。它的 `/dev/nvidiaN` 节点不是被分配的，因此不算。
+- `/dev/nvidiactl` 或 `/dev/nvidia-uvm` 之类的控制设备伴随分配出现，但不标识 GPU。
+- 其他 CDI 种类不算。包括 device plugin 的 `k8s.device-plugin.nvidia.com/gdrcopy=all` 和 `…/mofed=all`——它们随每次分配而来——容器工具链的 `nvidia.com/gpu`，以及 Mokka 自己的 `nvml-mock.nvidia.com/gpu=all`。
 
-An allocation always wins over the `devices` annotation: the container keeps
-exactly the GPUs it was allocated, and `nvidia-smi` reports that subset, not
-the whole node. This is the rule from
-[MEP-0002](https://github.com/NVIDIA/k8s-test-infra/tree/main/enhancements/meps/0002-device-plugin-nri-composition):
-whatever the scheduler allocated is never widened.
+分配始终优先于 `devices` 注解：容器精确保留分配给它的 GPU，`nvidia-smi` 报告的是该子集而非整个节点。这是 [MEP-0002](https://github.com/NVIDIA/k8s-test-infra/tree/main/enhancements/meps/0002-device-plugin-nri-composition) 的规则：调度器分配的内容永不被扩大。
 
-!!! warning "The device plugin must leave evidence of the allocation"
-    A device plugin that only sets `NVIDIA_VISIBLE_DEVICES` (the default
-    `envvar` strategy) or delivers CDI devices only through pod annotations
-    (`cdi-annotations`) leaves no evidence in the container spec. Its pods are
-    treated as unallocated and receive nothing. Run the device plugin with
-    `--pass-device-specs=true`, as the
-    [device plugin guide](../guides/device-plugin.md) does, or with the
-    `cdi-cri` strategy, as the GPU Operator does when CDI is enabled.
+!!! warning "device plugin 必须留下分配证据"
+    只设置 `NVIDIA_VISIBLE_DEVICES`（默认的 `envvar` 策略）或只通过 Pod 注解交付 CDI 设备（`cdi-annotations`）的 device plugin，不会在容器 spec 中留下证据。它的 Pod 会被视为未分配，什么也得不到。请使用 `--pass-device-specs=true` 运行 device plugin，如[device plugin 指南](../guides/device-plugin.md)所示，或使用 `cdi-cri` 策略，即 GPU Operator 启用 CDI 时的做法。
 
-!!! note "IMEX sits outside this rule"
-    IMEX channels are requested by their own annotation and never suppressed.
-    The annotation is for containers that claim no channel: a workload of a
-    ComputeDomain gets its channel through its DRA claim and needs no
-    annotation.
+!!! note "IMEX 不在此规则之内"
+    IMEX 通道由自己的注解请求，永不被抑制。该注解是为不声明通道的容器准备的：ComputeDomain 的工作负载通过其 DRA claim 获得通道，无需注解。
 
-## Selecting InfiniBand
+## 选择 InfiniBand
 
-Only the `infiniband` annotation selects InfiniBand. A privileged container
-inherits every host `/dev/infiniband/*` node under a wildcard cgroup rule
-without asking for RDMA, so device paths are not evidence. The plugin does not
-yet recognise an allocation from an RDMA device plugin or DRA driver; that needs
-a signal that inherited nodes cannot produce, and none has been validated.
+只有 `infiniband` 注解会选择 InfiniBand。特权容器在通配 cgroup 规则下继承所有宿主机 `/dev/infiniband/*` 节点，而无需请求 RDMA，因此设备路径不构成证据。插件目前还不识别来自 RDMA device plugin 或 DRA driver 的分配；那需要一种继承节点无法产生的信号，而目前还没有经过验证的信号。
 
-The annotation never adds or removes real `/dev/infiniband/*` nodes. It points
-the InfiniBand tools at the mock sysfs tree the node agent renders. On a profile
-without InfiniBand that tree holds no HCA: the pod still starts, its tools find
-nothing, and the plugin logs a warning.
+该注解从不添加或移除真实的 `/dev/infiniband/*` 节点。它把 InfiniBand 工具指向节点 agent 渲染的模拟 sysfs 树。在没有 InfiniBand 的 profile 上，该树中没有 HCA：Pod 仍会启动，其工具什么也找不到，插件会记录一条警告。
 
-## Device injection modes
+## 设备注入模式
 
-When the plugin delivers GPUs to a `devices`-annotated pod with no allocation,
-`deviceInjectionMode` picks the mechanism. It changes *how*, never *whether*,
-and never touches an allocated container.
+当插件把 GPU 交付给带 `devices` 注解但没有分配的 Pod 时，`deviceInjectionMode` 选择机制。它只改变*方式*，不改变*是否*，且从不触碰已分配的容器。
 
-| Mode            | Delivers                                                                            | Use when                                                                                                                                                     |
-|-----------------|-------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `raw` (default) | The mock `/dev/nvidiaN` nodes, staged directly into the adjustment                  | Always works. Required by MEP-0002 to stay reachable, and the only mode that works where CDI is off or absent                                                |
-| `cdi`           | A CDI device reference the runtime resolves from the spec the `cri` simulator wrote | containerd 2.1 or later, or 1.7.30 or later. containerd 2.0.x drops a CDI device requested through NRI without an error, so the container starts with no GPU |
+| 模式 | 交付内容 | 适用场景 |
+|---|---|---|
+| `raw`（默认） | 模拟 `/dev/nvidiaN` 节点，直接放入调整中 | 始终可用。MEP-0002 要求保持可达性，也是 CDI 关闭或不存在时唯一可用的模式 |
+| `cdi` | 运行时从 `cri` 模拟器写下的规格中解析的 CDI 设备引用 | containerd 2.1 或更新，或 1.7.30 或更新。containerd 2.0.x 会无错误地丢掉通过 NRI 请求的 CDI 设备，因此容器启动时没有 GPU |
 
-An unknown value is rejected rather than coerced. A typo that silently fell back
-to `raw` would look identical to a working CDI deployment, and the difference is
-only visible in the OCI spec of an already-running pod.
+未知值会被拒绝而不是强制转换。拼写错误若静默回退到 `raw`，看起来会与正常工作的 CDI 部署完全一样，而区别只能在已运行 Pod 的 OCI spec 中看到。
 
-## Annotations
+## 注解
 
-| Annotation | Effect |
+| 注解 | 效果 |
 |---|---|
-| `nvml-mock.nvidia.com/inject: "false"` | Opt out of adjustment entirely |
-| `nvml-mock.nvidia.com/devices: "true"` | Without an allocation: receive the overlay and every mock GPU. With an allocation: no effect |
-| `nvml-mock.nvidia.com/infiniband: "true"` | Receive the overlay with the mock InfiniBand tools active. Adds no GPUs |
-| `nvml-mock.nvidia.com/imex-channels: "true"` | Receive the mock IMEX channels. Adds no overlay and no GPUs |
+| `nvml-mock.nvidia.com/inject: "false"` | 完全退出调整 |
+| `nvml-mock.nvidia.com/devices: "true"` | 无分配时：获得覆盖层和所有模拟 GPU。有分配时：无效果 |
+| `nvml-mock.nvidia.com/infiniband: "true"` | 获得模拟 InfiniBand 工具生效的覆盖层。不添加 GPU |
+| `nvml-mock.nvidia.com/imex-channels: "true"` | 获得模拟 IMEX 通道。不添加覆盖层，也不添加 GPU |
 
-## Failing open
+## Fail-open
 
-Every step degrades rather than blocks.
+每一步都会降级而非阻塞。
 
-Before each adjustment, the plugin checks the node agent in its pod. It takes
-the shared side of a staging lock, which the agent holds exclusively while it
-stages or tears down the driver tree, and asks the agent's `/stagedz` endpoint
-whether the tree is staged. `/stagedz` follows the agent's Stage wave only, so
-a failed Apply, such as a failed write of the NFD feature file, does not close
-it. In `cdi` mode, Stage also withdraws the plugin's CDI spec until Apply
-republishes it, so a container created in between gets raw device nodes from
-the new tree rather than a spec naming nodes a smaller profile removed. While
-the agent is restarting, restaging or not yet staged, the plugin
-leaves the container unmodified, logs a warning naming its namespace, pod and
-container, and fails `/readyz` with the reason. Containers the plugin skips
-anyway, such as those in an excluded namespace, are not reported.
+每次调整前，插件检查其 Pod 内的节点 agent。它取得 staging 锁的共享端——agent 在部署或拆除驱动树时独占该锁——并询问 agent 的 `/stagedz` 端点目录树是否已部署。`/stagedz` 只跟随 agent 的 Stage 波次，因此失败的 Apply（如 NFD feature 文件写入失败）不会关闭它。在 `cdi` 模式下，Stage 还会撤回插件的 CDI 规格，直到 Apply 重新发布，因此这期间创建的容器会从新目录树获得原始设备节点，而不是一个命名了较小 profile 已移除节点的规格。当 agent 正在重启、重新部署或尚未部署时，插件保持容器不变，记录一条点名其命名空间、Pod 和容器的警告，并让 `/readyz` 因该原因失败。插件本来就会跳过的容器，例如被排除命名空间中的，不会被报告。
 
-The ComputeDomain daemon skips this check. It gets `nvidia-imex.real` only
-while that file is staged, and the agent publishes it last and withdraws it
-first. A daemon left unmodified would keep running without `nvidia-imex.real`
-until the DRA driver's startup probe restarts it.
+ComputeDomain daemon 跳过该检查。它只在 `nvidia-imex.real` 已部署时获得该文件，而 agent 最后发布它、最先撤回它。未被修改的 daemon 会一直运行而没有 `nvidia-imex.real`，直到 DRA driver 的启动探针重启它。
 
-The lock file lives in a memory-backed `emptyDir` mounted only into the node
-agent and the plugin, so no workload can hold it and stall staging. It covers
-the plugin's decision, not the runtime applying it, so a teardown that starts
-in between can still race one container. During pod termination the agent
-waits at most half of its shutdown timeout for the lock, then tears down
-without it.
+锁文件位于一个内存支持的 `emptyDir` 中，只挂载到节点 agent 和插件，因此没有工作负载能持有它而阻塞部署。它覆盖的是插件的*决定*，而不是运行时应用该决定，因此期间开始的拆除仍可能与一个容器竞态。在 Pod 终止期间，agent 最多等待其关闭超时的一半来获取锁，然后不带锁拆除。
 
-Once the agent is serving, individual missing device surfaces can still reduce
-injection to overlay-only instead of blocking container creation.
+即使 agent 正在服务，个别缺失的设备接口面仍可能把注入缩减为仅覆盖层，而不是阻塞容器创建。
 
-The alternative would be worse: a plugin that errors on a missing surface blocks
-every container on the node, including the daemon that would have created the
-surface.
+另一种选择会更糟：一个在接口面缺失时报错的插件会阻塞节点上所有容器，包括本应创建该接口面的 daemon。
 
-That choice has a consequence worth knowing about. **A plugin containerd has
-unregistered stays alive and silently stops injecting** — nothing crashes, pods
-just quietly come up without GPUs. The plugin therefore reports whether
-injection is actually happening, rather than merely whether the process is
-running.
+这个选择有一个值得了解的后果。**被 containerd 注销的插件会继续存活并静默停止注入**——什么都不会崩溃，Pod 只是悄悄在没有 GPU 的情况下启动。因此插件报告的是注入是否真的在发生，而不仅仅是进程是否在运行。
 
-It also watches for wedged requests. If an in-flight adjustment exceeds the
-timeout containerd told the plugin it is applying, the runtime has already
-abandoned that request and the container was created without injection. The
-threshold is a multiple of the runtime's own timeout, so a single slow request
-cannot trigger a restart, but a genuinely stuck plugin gets replaced.
+它还会监视卡住的请求。如果一次进行中的调整超过了 containerd 告诉插件它正在应用的超时，运行时已经放弃该请求，容器是在没有注入的情况下创建的。阈值是运行时自身超时的倍数，因此单个慢请求不会触发重启，但真正卡住的插件会被替换。
 
-## Mount propagation
+## 挂载传播
 
-The overlay arrives as two bind mounts: the driver tree read-only, and its
-`config` directory writable on top of it, because `nvidia-smi --gpu-reset`
-writes there. Both are `rprivate`, the propagation a `hostPath` volume without
-`mountPropagation` gets.
+覆盖层以两个 bind 挂载抵达：驱动树只读，其 `config` 目录以可写方式覆盖其上，因为 `nvidia-smi --gpu-reset` 会写入那里。两者都是 `rprivate`，即没有 `mountPropagation` 的 `hostPath` 卷所获得的传播方式。
 
-A container with a `Bidirectional` volume, such as a DRA kubelet plugin, has a
-shared root. Without the option, the writable bind was copied onto the node at
-`/var/lib/nvml-mock/driver/config`, doubling there with every such container
-and staying after the pod was gone. `rslave` would also stop that, but
-containerd accepts it only when the node mount holding the overlay is shared or
-slave, and otherwise fails container creation. For nodes that already have the
-copies, see
-[troubleshooting](../troubleshooting.md#mounts-pile-up-on-a-node-with-nri-enabled).
+带有 `Bidirectional` 卷的容器，例如 DRA kubelet plugin，具有共享根目录。没有该选项时，可写 bind 会被复制到节点上的 `/var/lib/nvml-mock/driver/config`，每有一个这样的容器就翻倍，并在 Pod 消失后留存。`rslave` 也能阻止这一点，但 containerd 只在持有覆盖层的节点挂载是 shared 或 slave 时才接受它，否则容器创建失败。对于已经有副本的节点，参见[排障](../troubleshooting.md#mounts-pile-up-on-a-node-with-nri-enabled)。
 
-## How the code is split
+## 代码如何划分
 
-| Package | Role |
+| 包 | 角色 |
 |---|---|
-| `internal/nri` | The runtime-coupled half: registers with containerd, translates its container types, reports health |
-| `internal/nri/inject` | The decision: what to add to a container. No containerd types cross this boundary, so every rule above is exercisable as a plain table test |
+| `internal/nri` | 与运行时耦合的一半：向 containerd 注册、转换其容器类型、报告健康 |
+| `internal/nri/inject` | 决策：向容器添加什么。没有 containerd 类型跨越此边界，因此上述每条规则都能作为普通表驱动测试来验证 |
 
-## Related
+## 相关链接
 
-| To read about | See |
+| 想了解 | 参见 |
 |---|---|
-| How the whole system fits together | [Architecture](../architecture.md) |
-| What stages the tree this plugin mounts | [Node Daemon](node-daemon.md) |
-| Its chart values | [Installation](../helm-chart.md) |
-| Checking that it injects | [Set up NRI injection](../guides/nri-injection.md) |
+| 整个系统如何组合 | [架构](../architecture.md) |
+| 是什么部署了本插件挂载的目录树 | [节点守护进程](node-daemon.md) |
+| 其 chart 取值 | [安装](../helm-chart.md) |
+| 检查它是否注入 | [配置 NRI 注入](../guides/nri-injection.md) |

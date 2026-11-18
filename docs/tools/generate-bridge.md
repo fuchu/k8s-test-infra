@@ -1,29 +1,20 @@
 # generate-bridge
 
-Keeps the mock NVML library ABI-complete. Every NVML function the hand-written
-bridge does not implement gets a generated cgo stub, so the library still
-exports the full symbol set and a consumer that calls an unimplemented function
-gets a defined answer instead of a link error.
+保持模拟 NVML 库在 ABI 层面完整。手写桥接代码未实现的每个 NVML 函数都会得到一个自动生成的 cgo 桩，因此该库仍导出完整符号集，调用未实现函数的消费者会得到确定的应答，而不是链接错误。
 
-It reads the function list from go-nvml's `nvml.go`, the C prototypes from
-`nvml.h`, and the existing `//export` directives from the bridge directory. What
-is left over — every function named in `nvml.go` with no hand-written
-implementation — is written to `stubs_generated.go`.
+它从 go-nvml 的 `nvml.go` 读取函数列表，从 `nvml.h` 读取 C 原型，并从桥接目录中读取现有的 `//export` 指令。剩下的部分——`nvml.go` 中命名但没有手写实现的每个函数——会被写入 `stubs_generated.go`。
 
-A hand-written implementation therefore always displaces its stub. You never
-delete one by hand; you add the real function and re-run the generator.
+因此手写实现总会取代它的桩。你永远不需要手工删除桩；添加真正的函数并重新运行生成器即可。
 
-## Running it
+## 运行
 
 ```bash
 make gen
 ```
 
-That is the supported path: it resolves go-nvml through the module cache and
-runs the `//go:generate` directive in `pkg/gpu/mocknvml/bridge/helpers.go`.
+这是受支持的路径：它通过模块缓存解析 go-nvml，并运行 `pkg/gpu/mocknvml/bridge/helpers.go` 中的 `//go:generate` 指令。
 
-The read-only modes are not reachable through `make gen`, so invoke the binary
-directly for those:
+只读模式无法通过 `make gen` 到达，因此需要直接调用二进制文件：
 
 ```bash
 GO_NVML_DIR=$(go list -m -f '{{.Dir}}' github.com/NVIDIA/go-nvml)
@@ -32,53 +23,44 @@ go run ./cmd/generate-bridge -stats    -input  "$GO_NVML_DIR/pkg/nvml/nvml.go"
 go run ./cmd/generate-bridge -validate -header "$GO_NVML_DIR/pkg/nvml/nvml.h"
 ```
 
-## Modes
+## 模式
 
-| Mode | Requires | Behaviour |
+| 模式 | 需要 | 行为 |
 |---|---|---|
-| generate (default) | `-input` and `-header` | Writes `-output`, unconditionally |
-| `-stats` | `-input` | Prints an NVML coverage table — total functions, hand-written implementations, generated stubs, and a per-file `//export` count — then exits `0` |
-| `-symbols` | a symbol file | Reads the symbols a real `libnvidia-ml.so` exports and reports how many the bridge implements, how many are generated stubs that answer `NOT_SUPPORTED`, and which are missing, then exits `0` |
-| `-validate` | `-header` | Compares each hand-written export's Go parameter count against its `nvml.h` prototype. Exits `1` after printing one `WARNING: <file>:<line>` per mismatch, or `0` |
+| generate（默认） | `-input` 和 `-header` | 无条件写入 `-output` |
+| `-stats` | `-input` | 打印 NVML 覆盖率表——函数总数、手写实现数、生成的桩数，以及每个文件的 `//export` 计数——然后退出 `0` |
+| `-symbols` | 符号文件 | 读取真实 `libnvidia-ml.so` 导出的符号，报告桥接实现了多少个、有多少个是应答 `NOT_SUPPORTED` 的生成桩、哪些缺失，然后退出 `0` |
+| `-validate` | `-header` | 把每个手写导出函数的 Go 参数数量与其 `nvml.h` 原型比较。每处不匹配打印一条 `WARNING: <file>:<line>` 后退出 `1`，否则退出 `0` |
 
-`-symbols` is the comparison with a real driver rather than with go-nvml: take the
-symbol list from a capture (`nvml-symbols.txt`), and pass `-mock-symbols` so the
-aliases the C shim provides are not reported as missing.
+`-symbols` 是与真实驱动的对比，而不是与 go-nvml 的对比：从采集数据取符号列表（`nvml-symbols.txt`），并传入 `-mock-symbols`，这样 C shim 提供的别名就不会被报告为缺失。
 
 ```bash
 go run ./cmd/generate-bridge -symbols real/nvml-symbols.txt -mock-symbols mock/nvml-symbols.txt
 ```
 
-`-stats` wins when both read-only flags are set. A required path that is missing
-or unreadable exits `1` before any work happens, with a message pointing at
-`make gen`.
+同时设置两个只读标志时，`-stats` 优先。必需路径缺失或不可读会在做任何工作之前退出 `1`，并给出指向 `make gen` 的提示。
 
 ## Flags
 
-| Flag | Default | Description |
+| Flag | 默认值 | 说明 |
 |------|---------|-------------|
-| `-input` | none | NVML Go wrapper file (`nvml.go`) |
-| `-header` | none | NVML C header, for prototype extraction |
-| `-bridge` | `pkg/gpu/mocknvml/bridge` | Directory scanned for existing implementations |
-| `-output` | `pkg/gpu/mocknvml/bridge/stubs_generated.go` | Where generated stubs are written |
-| `-stats` | `false` | Print the coverage table and exit |
-| `-validate` | `false` | Check export parameter counts against `nvml.h` |
-| `-symbols` | none | File of the real library's exported symbols (`nm -D --defined-only` output or one name per line); report the bridge's coverage of them |
-| `-mock-symbols` | none | With `-symbols`: the same listing for the built mock library, so the legacy unversioned names the C shim exports count as exported |
+| `-input` | 无 | NVML Go 包装文件（`nvml.go`） |
+| `-header` | 无 | NVML C 头文件，用于提取原型 |
+| `-bridge` | `pkg/gpu/mocknvml/bridge` | 扫描现有实现的目录 |
+| `-output` | `pkg/gpu/mocknvml/bridge/stubs_generated.go` | 生成的桩写入位置 |
+| `-stats` | `false` | 打印覆盖率表并退出 |
+| `-validate` | `false` | 对照 `nvml.h` 检查导出函数参数数量 |
+| `-symbols` | 无 | 真实库导出符号的文件（`nm -D --defined-only` 的输出或每行一个名称）；报告桥接对它们的覆盖率 |
+| `-mock-symbols` | 无 | 与 `-symbols` 配合：构建出的模拟库的同样列表，使 C shim 导出的旧版无版本号名称也算作已导出 |
 
-## Why the output is committed
+## 为什么要提交输出
 
-`stubs_generated.go` is checked in, and `make gen-check` re-runs generation and
-fails when the bridge directory comes back dirty.
+`stubs_generated.go` 已签入仓库，`make gen-check` 会重新运行生成，并在桥接目录出现改动时失败。
 
-The guard earns its place because the trigger is invisible: bumping go-nvml adds
-new NVML entry points but does not regenerate anything, so without it the mock
-library quietly stops exporting the new symbols and only a consumer calling one
-would notice.
+这道守卫之所以有价值，是因为触发条件不可见：升级 go-nvml 会增加新的 NVML 入口点，但不会重新生成任何东西，因此没有它，模拟库会悄然停止导出新符号，只有调用某个新符号的消费者才会发现。
 
-## See also
+## 另见
 
-- [Command-line tools](README.md)
-- [Libraries and Shims](../components/libraries-and-shims.md) — how the bridge
-  fits under the mock NVML library
-- [Local Development](../contributing/local-development.md)
+- [命令行工具](README.md)
+- [库与 Shims](../components/libraries-and-shims.md)——桥接在模拟 NVML 库下的位置
+- [本地开发](../contributing/local-development.md)

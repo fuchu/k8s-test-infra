@@ -1,115 +1,71 @@
-# FAQ
+# 常见问题
 
-## What is not simulated yet?
+## 哪些内容尚未模拟？
 
-Reading a surface that Mokka does not stage gives the same answer as a machine
-with no GPU, so a consumer gated on one of these will refuse to start rather
-than fail in an interesting way:
+读取 Mokka 未部署的接口面，得到的应答与没有 GPU 的机器相同，因此依赖这些接口的消费者会拒绝启动，而不是以有趣的方式失败：
 
-| Surface | Consumer that reads it |
+| 接口面 | 读取它的消费者 |
 |---|---|
-| PCIe config space — `/sys/bus/pci/devices/<BDF>/config`, `/proc/bus/pci/devices` | `lspci -vv`, low-level probes |
-| fabricmanager telemetry socket, `nvswitch-audit` | DCGM-Exporter fabric-manager collector, operator diagnostics |
-| NVLink link-state change events, RDMA netlink events | tools reacting to link degradation |
+| PCIe 配置空间——`/sys/bus/pci/devices/<BDF>/config`、`/proc/bus/pci/devices` | `lspci -vv`、底层探测工具 |
+| fabricmanager 遥测 socket、`nvswitch-audit` | DCGM-Exporter 的 fabric-manager 采集器、operator 诊断 |
+| NVLink 链路状态变化事件、RDMA netlink 事件 | 对链路降级做出反应的工具 |
 
-## Can I run CUDA workloads against Mokka?
+## 能否针对 Mokka 运行 CUDA 工作负载？
 
-No. CUDA simulation on CPU is not supported as of now.
+不能。目前不支持在 CPU 上模拟 CUDA。
 
-## Do I need a real GPU, or a GPU driver?
+## 需要真实 GPU 或 GPU 驱动吗？
 
-No. Mokka runs on ordinary CPU nodes. There is no kernel module and no data
-path — that is the point.
+不需要。Mokka 运行在普通 CPU 节点上。没有内核模块，也没有数据通路——这正是它的意义所在。
 
-## Is this safe for production?
+## 这能用于生产环境吗？
 
-No, and it is not meant to be. Mokka is a test double for CI and test clusters.
-It reports GPUs that do not exist, which is useful for testing scheduling and
-failure handling and actively harmful anywhere real work is expected to land.
+不能，它也不是为此设计的。Mokka 是面向 CI 和测试集群的测试替身。它上报并不存在的 GPU，这对测试调度和故障处理很有用，但在期望真实工作落地的环境中则是有害的。
 
-## Which GPU models can I simulate?
+## 可以模拟哪些 GPU 型号？
 
-Eight profiles ship with the chart: `a100`, `b200`, `gb200`, `gb300`, `h100`,
-`l40s`, `t4` and `vrnvl72`. `gb300` is the default. Switch with
-`--set gpu.profile=<name>`.
+chart 自带八种 profile：`a100`、`b200`、`gb200`、`gb300`、`h100`、`l40s`、`t4` 和 `vrnvl72`。`gb300` 是默认型号。用 `--set gpu.profile=<name>` 切换。
 
-See [Configuration](configuration.md) for what each profile defines.
+各 profile 定义了什么，参见[配置参考](configuration.md)。
 
-## Can one cluster have different GPU models on different nodes?
+## 一个集群能否在不同节点上使用不同 GPU 型号？
 
-Yes. Each release targets a node set, so a cluster can present A100 and T4
-workers at the same time. This is exercised in CI as a heterogeneous fleet. See
-[different GPU models on different nodes](guides/device-plugin.md#different-gpu-models-on-different-nodes).
+可以。每个 release 面向一组节点，因此集群可以同时呈现 A100 和 T4 worker。CI 中就是按异构机群来演练的。参见[不同节点使用不同 GPU 型号](guides/device-plugin.md#different-gpu-models-on-different-nodes)。
 
-## Does `nvidia-smi` actually work?
+## `nvidia-smi` 真的能用吗？
 
-Yes — the real binary, unmodified. It loads Mokka's `libnvidia-ml.so` instead of
-the vendor one and reports whatever the profile describes.
+能用——是未经修改的真实二进制文件。它加载 Mokka 的 `libnvidia-ml.so` 而不是厂商库，并报告 profile 描述的任何内容。
 
-## Why does `nvidia-smi` always report 0 MiB used?
+## 为什么 `nvidia-smi` 总是报告 0 MiB 已用？
 
-Because the profile says so, and nothing moves it. Mokka runs no kernels, so no
-workload consumes device memory, and the profile's `memory.used_bytes` — `0` in
-every shipped profile — is what every consumer reads no matter what is
-scheduled.
+因为 profile 就是这么写的，而且没有东西会改变它。Mokka 不运行 kernel，因此没有工作负载消耗设备显存；无论调度了什么，所有消费者读到的都是 profile 里的 `memory.used_bytes`——在每个自带 profile 中都是 `0`。
 
-Set `allocationWatcher.enabled=true` to make used and free memory track
-Kubernetes GPU allocation instead: a sidecar polls the kubelet pod-resources API
-and moves the numbers as claims come and go. The values are still synthetic —
-they report that a claim *exists*, not what a workload touched — which is enough
-to exercise a consumer that reads memory pressure. See
-[allocation-aware memory](configuration.md#allocation-aware--opt-in).
+设置 `allocationWatcher.enabled=true` 可让已用和空闲显存跟随 Kubernetes GPU 分配：一个 sidecar 轮询 kubelet pod-resources API，随申请的出现和消失更新数字。这些值仍然是合成的——它们报告的是申请*存在*，而不是工作负载碰过什么——足以演练读取显存压力的消费者。参见[感知分配的显存](configuration.md#allocation-aware--opt-in)。
 
-## Which kernel modules does `lsmod` show?
+## `lsmod` 会显示哪些内核模块？
 
-`nvidia`, `nvidia_uvm`, `nvidia_modeset`, `gdrdrv` and `nvidia_fs`, plus
-`nvidia_peermem` and `mlx5_core` where InfiniBand is enabled.
-`/sys/module/nvidia/refcnt` exists too, and the node's own modules stay visible
-beside the simulated ones.
+`nvidia`、`nvidia_uvm`、`nvidia_modeset`、`gdrdrv` 和 `nvidia_fs`，启用 InfiniBand 时还有 `nvidia_peermem` 和 `mlx5_core`。`/sys/module/nvidia/refcnt` 也存在，节点自身的模块会与模拟模块一并可见。
 
-That covers the modules the GPU Operator validator greps for. The mirror is
-refreshed by a state reconcile, so it can lag a module load or unload on the
-node. See [the Helm chart reference](helm-chart.md) for how the surface reaches
-a container.
+这覆盖了 GPU Operator validator 会 grep 的模块。状态协调会刷新镜像，因此该镜像可能滞后于节点上的模块加载或卸载。接口面如何进入容器，参见 [Helm chart 参考](helm-chart.md)。
 
-## My pod requests a GPU but has no `nvidia-smi`. Why?
+## 我的 Pod 申请了 GPU，却没有 `nvidia-smi`。为什么？
 
-Two mechanisms put the mock driver into a container that holds GPUs, and both
-are on by default. The node daemon makes the `nvidia` runtime handler
-containerd's default, which mounts `nvidia-smi` and `libnvidia-ml.so` into any
-container whose `NVIDIA_VISIBLE_DEVICES` names GPUs, as the device plugin sets
-for the GPUs it allocates. The [NRI plugin](components/nri-plugin.md) injects
-the mock driver into a container that holds a GPU allocation.
+有两种机制会把模拟驱动放入持有 GPU 的容器，且默认都开启。节点守护进程把 `nvidia` 运行时 handler 设为 containerd 默认值，该 handler 会在任何 `NVIDIA_VISIBLE_DEVICES` 指定了 GPU 的容器中挂载 `nvidia-smi` 和 `libnvidia-ml.so`——device plugin 会为它分配的 GPU 这样设置。[NRI 插件](components/nri-plugin.md)也会把模拟驱动注入持有 GPU 分配的容器。
 
-A pod without `nvidia-smi` ran where neither reached it: the container runtime
-setup [failed](troubleshooting.md#pods-get-no-mock-driver-or-the-node-pod-is-not-ready)
-or is off (`nodeAgent.containerRuntime.enabled=false`), and the NRI plugin is
-off (`nri.enabled=false`) or containerd on the node has NRI disabled; see
-[Troubleshooting](troubleshooting.md#the-node-pod-is-notready-and-nvml-mock-nri-crash-loops).
+如果 Pod 里没有 `nvidia-smi`，说明它所在的位置两种机制都没能覆盖：容器运行时配置[失败](troubleshooting.md#pods-get-no-mock-driver-or-the-node-pod-is-not-ready)或未启用（`nodeAgent.containerRuntime.enabled=false`），且 NRI 插件已禁用（`nri.enabled=false`）或节点上的 containerd 禁用了 NRI；参见[排障](troubleshooting.md#the-node-pod-is-notready-and-nvml-mock-nri-crash-loops)。
 
-Otherwise, mount the driver root yourself the way
-[`local/gpu-validator.k8s.yaml`](https://github.com/NVIDIA/k8s-test-infra/blob/main/local/gpu-validator.k8s.yaml)
-does: a hostPath at `/run/nvidia/driver` plus a matching `LD_LIBRARY_PATH`.
+否则，可以像 [`local/gpu-validator.k8s.yaml`](https://github.com/NVIDIA/k8s-test-infra/blob/main/local/gpu-validator.k8s.yaml) 那样自行挂载驱动根目录：一个位于 `/run/nvidia/driver` 的 hostPath，加上相应的 `LD_LIBRARY_PATH`。
 
-## Can I use MIG?
+## 可以使用 MIG 吗？
 
-Yes, on the MIG-capable profiles — `a100`, `h100`, `b200`, `gb200` and `gb300`.
-`nvidia-smi -mig` and `nvidia-smi mig -cgi/-cci/-dgi/-dci` work against the
-mock as they do against a driver, and a node can boot already partitioned, in
-which case the device plugin advertises one resource per slice under
-`migStrategy=single`.
+可以，在支持 MIG 的 profile 上——`a100`、`h100`、`b200`、`gb200` 和 `gb300`。`nvidia-smi -mig` 和 `nvidia-smi mig -cgi/-cci/-dgi/-dci` 对 mock 的作用与对驱动一样，节点可以在启动时就已分区，此时 device plugin 在 `migStrategy=single` 下按每个分片通告一个资源。
 
-One boundary: a repartition made at runtime moves the NVML view only. What a
-node can *allocate* is the layout it booted with, because the driver capability
-surface is staged when the pod starts.
+有一个边界：运行时重新分区只改变 NVML 视图。节点能*分配*的是启动时的布局，因为驱动能力接口面在 Pod 启动时才部署。
 
-See the [MIG partitioning guide](guides/mig/README.md).
+参见 [MIG 切分指南](guides/mig/README.md)。
 
-## Can I simulate a broken GPU?
+## 可以模拟故障 GPU 吗？
 
-Yes. Failure is a configuration state rather than a special code path, so every
-surface reports it consistently: `nvidia-smi`, DCGM and the device plugin agree,
-as they would on real hardware. ECC errors, a lost GPU and a fallen-off-the-bus
-GPU are all injectable.
+可以。故障是一种配置状态，而不是特殊代码路径，因此每个接口面都会一致地报告：`nvidia-smi`、DCGM 和 device plugin 保持一致，就像在真实硬件上一样。ECC 错误、GPU 丢失和从总线脱落的 GPU 都可以注入。
 
-See the [failure injection guide](guides/failure-injection/README.md).
+参见[故障注入指南](guides/failure-injection/README.md)。

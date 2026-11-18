@@ -10,7 +10,7 @@
 
 指南里大部分 `helm install` 都从境外 registry 拉取镜像：`ghcr.io`（Mokka、Slinky、Run:ai FGO）、`helm.ngc.nvidia.com` / `nvcr.io`（GPU Operator、DRA driver、NVIDIA device plugin）、`quay.io`（cert-manager）、`docker.io`（Percona）等。国内直连这些域名常常很慢甚至超时。
 
-如果你环境里有可用的私有镜像仓库（下文以 `harbor.heilansc.com` 为例，请替换成你自己的域名），可以给 chart 用的镜像统一加上**仓库前缀**，把原 registry 嵌套到前缀之下。两种常见写法：
+如果你的环境里有可用的私有镜像仓库（下文以 `harbor.heilansc.com` 为例，请替换成你自己的域名），可以为 chart 用到的镜像统一加上**仓库前缀**，把原 registry 嵌套到前缀之下。两种常见写法：
 
 - **Mokka 的 `nvml-mock` chart（OCI，来自 `ghcr.io`）** 自带 `global.imageRegistry` 开关，直接加前缀即可：
 
@@ -69,12 +69,12 @@
 | [NVIDIA Dynamo](dynamo/README.md) | 用 Dynamo 提供 OpenAI 兼容的接口，其 worker 经 GPU Operator 调度到模拟 GPU 上 | 约 15 分钟 |
 | [Slinky (Slurm)](slinky/README.md) | 搭一个 Slurm 集群，让 `slurmd` 把模拟 GPU 识别为 GRES，并用 `srun --gres=gpu:N` 提交作业 | 约 20 分钟 |
 | [NVIDIA DRA Driver](dra.md) | 把模拟 GPU 发布成 ResourceSlice，再通过 ResourceClaim 调度 Pod | 约 10 分钟 |
-| [Run:ai fake-gpu-operator](runai-fgo/README.md) | 两个节点池：一个由 Mokka 提供真实的 NVML 垫片，另一个由 FGO 提供 | 约 10 分钟 |
+| [Run:ai fake-gpu-operator](runai-fgo/README.md) | 两个节点池：一个由 Mokka 提供真实的 NVML shim，另一个由 FGO 提供 | 约 10 分钟 |
 | [Topograph](topograph/README.md) | 把 4 台模拟 GB200 节点划分成两个 NVLink 域，并为每个节点打标签，供拓扑感知调度器使用 | 约 10 分钟 |
 | [ComputeDomain](compute-domain/README.md) | 构造 NVLink 网络标识：用真实的 `nvidia-imex` 在模拟 GPU 上组建一个可用的域 | 10–20 分钟 |
 | [NVSentinel](nv-sentinel/README.md) | 完整的健康检查闭环：检测温度越界 → 隔离并驱逐节点 → 降温后自动恢复 | 约 30 分钟 |
 
-最后两篇最复杂：ComputeDomain 需要一个 4 个 worker 节点、且启用了 containerd NRI 的集群；NVSentinel 则要先把 GPU Operator、cert-manager 和 NVSentinel 都装好才能开始。
+最后两篇最复杂：ComputeDomain 需要一个含 4 个 worker 节点、且启用了 containerd NRI 的集群；NVSentinel 则要先把 GPU Operator、cert-manager 和 NVSentinel 都装好才能开始。
 
 ## 任务：用 Mokka 能做什么
 
@@ -93,7 +93,7 @@
 
 这部分不是独立教程。它是叠加在 GPU Operator 之上的，并不替换 GPU Operator，因此放在 Tilt 环境里，不单独提供集群和 `run.sh`。
 
-Prometheus 抓取的是未经修改的官方 NVIDIA `dcgm-exporter` 指标——只不过 exporter 读的是模拟的 `libnvidia-ml.so`；Grafana 负责展示。整个过程发生在一台 GPU 都没有的集群上。此外还有两个手动触发器，用来注入温度或 Xid 故障：如果指标始终没有出现在 Prometheus 里，触发动作就会失败。也就是说，抓取链路是被「断言」验证的，而不是靠肉眼看图。
+Prometheus 抓取的是未经修改的官方 NVIDIA `dcgm-exporter` 指标——只不过 exporter 读的是模拟的 `libnvidia-ml.so`；Grafana 负责展示。整个过程发生在一台 GPU 都没有的集群上。此外还有两个手动触发器，用来注入温度或 Xid 故障：如果指标始终没有出现在 Prometheus 里，触发动作就会失败。抓取链路靠「断言」验证，而不是靠肉眼看图。
 
 ```bash
 make cluster-create

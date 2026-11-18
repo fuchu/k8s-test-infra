@@ -1,8 +1,8 @@
-# Pull Requests
+# Pull Request
 
-## Commits
+## 提交
 
-Mokka uses [Conventional Commits](https://www.conventionalcommits.org/):
+Mokka 使用 [Conventional Commits](https://www.conventionalcommits.org/)：
 
 ```text
 type(scope): imperative summary
@@ -10,9 +10,7 @@ type(scope): imperative summary
 Why the change is needed, and what it does about it. Wrap at 72 columns.
 ```
 
-Types in use: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `ci`. The
-scope is the component you touched — `chart`, `mocknvml`, `node-agent`, `nri`,
-`e2e`, `demo`, `helm`. Append `!` for a breaking change.
+使用的类型有：`feat`、`fix`、`docs`、`refactor`、`test`、`chore`、`ci`。scope 是你改动的组件——`chart`、`mocknvml`、`node-agent`、`nri`、`e2e`、`demo`、`helm`。破坏性变更在末尾追加 `!`。
 
 ```text
 feat(nri): mock IMEX channel injection over NRI
@@ -21,110 +19,77 @@ docs(e2e): correct the harness lifecycle
 chore!: remove vendor/ and resolve dependencies through the proxy
 ```
 
-Write the body for someone reading `git log` in a year with no access to the
-pull request. Explain the reason, not the diff.
+写正文时，设想一年后有人在没有 pull request 可看的情况下阅读 `git log`。解释原因，而不是复述 diff。
 
-### Sign off every commit
+### 每个提交都要签名
 
-The project uses the Developer Certificate of Origin:
+项目使用开发者来源证书（Developer Certificate of Origin）：
 
 ```bash
 git commit -s
 ```
 
-## Before you open the PR
+## 打开 PR 之前
 
 ```bash
 make lint-fix
 make test
-make helm-tests     # if you touched a chart
+make helm-tests     # 如果改到了 chart
 ```
 
-See [Testing](testing.md) for the full list of gates and what each one checks.
+完整的关卡列表及各关卡检查什么，参见[测试](testing.md)。
 
-Also confirm:
+还要确认：
 
-- **New files carry an SPDX header.** Match the surrounding files.
-- **A changelog fragment is added** if the change is user-facing. See
-  [Changelog entries](#changelog-entries).
-- **Documentation is updated** alongside the behaviour it describes, not in a
-  follow-up.
+- **新文件带有 SPDX 头。** 与周边文件保持一致。
+- **已添加变更日志片段**（如果变更面向用户）。参见[变更日志条目](#changelog-entries)。
+- **文档与它所描述的行为一并更新**，而不是留到后续再补。
 
-## Changelog entries
+## 变更日志条目
 
-Each entry is a [changie](https://changie.dev) fragment: a small YAML file
-under `.changes/unreleased/`, one per change. Do not edit `CHANGELOG.md`. It
-holds released versions only and a maintainer writes it when cutting a release,
-so two pull requests never conflict over it.
+每条记录都是一个 [changie](https://changie.dev) 片段：`.changes/unreleased/` 下的一个小 YAML 文件，每次变更一个。不要编辑 `CHANGELOG.md`。它只包含已发布版本，由维护者在发版时撰写，因此两个 pull request 不会在它上面冲突。
 
 ```bash
-make changelog                                    # prompts for each field
-make changelog KIND=Fixed BODY="..." ISSUE=637    # non-interactive
+make changelog                                    # 逐项提示输入
+make changelog KIND=Fixed BODY="..." ISSUE=637    # 非交互方式
 ```
 
-`KIND` is one of the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
-sections: `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed` or `Security`.
-`ISSUE` is optional and renders as a trailing link to that issue or pull
-request. Write the body the way it should read in `CHANGELOG.md`, without the
-leading `- `. For a long entry, open the generated file and wrap the `body:`
-block with continuation lines indented two spaces past the first, the way the
-released entries are wrapped. To see how your entry renders:
+`KIND` 是 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 的一个小节：`Added`、`Changed`、`Deprecated`、`Removed`、`Fixed` 或 `Security`。`ISSUE` 可选，渲染为指向该 issue 或 pull request 的末尾链接。正文按它应出现在 `CHANGELOG.md` 中的样子写，不要带开头的 `- `。条目较长时，打开生成的文件，把 `body:` 块按已发布条目的方式换行，续行相对首行缩进两个空格。查看条目的渲染效果：
 
 ```bash
 make changelog-preview RELEASE_VERSION=0.0.0
 ```
 
-Refactors, tests, CI and documentation-only changes do not get an entry. A
-maintainer applies the `skip-changelog` label to those instead; CI fails a pull
-request that has neither a fragment nor the label. Dependabot pull requests are
-exempt through the `dependencies` label.
+重构、测试、CI 和纯文档变更不需要条目。维护者会为它们打上 `skip-changelog` 标签；既没有片段也没有标签的 pull request 会被 CI 判失败。Dependabot 的 pull request 通过 `dependencies` 标签豁免。
 
-## Opening it
+## 打开 PR
 
-Say what the change does and why. Link the issue it closes. If the change is
-substantial enough to need a design first, it needs a
-[MEP](enhancements.md) rather than a large pull request.
+说明变更做了什么以及为什么。链接它关闭的 issue。如果变更大到需要先做设计，那它应该是一个 [MEP](enhancements.md)，而不是一个巨大的 pull request。
 
-Keep them small. A single reviewer covers this repository, so three focused
-pull requests land faster than one that touches everything.
+保持小粒度。这个仓库只有一位评审者，三个聚焦的 pull request 比一个改动一切的 PR 落地更快。
 
-!!! note "E2E runs on a mirrored branch"
-    Unit, lint and chart checks run on the pull request itself. The E2E suite
-    runs from a `pull-request/N` branch that copy-pr-bot creates, so it appears
-    under a separate run rather than on the PR event. Nothing is wrong if you do
-    not see it immediately.
+!!! note "E2E 在镜像分支上运行"
+    单元、lint 和 chart 检查在 pull request 本身上运行。E2E 套件从 copy-pr-bot 创建的 `pull-request/N` 分支运行，因此出现在一次单独的运行中，而不是 PR 事件上。没有立刻看到它是正常的。
 
-## Review
+## 评审
 
-Reviewers look for the same things the linters cannot check: whether the change
-does what its message claims, whether the tests would fail if the behaviour
-regressed, and whether comments explain intent rather than restate the code.
+评审者关注的是 linter 无法检查的同一类问题：变更是否如其说明所述，行为回归时测试是否会失败，以及注释是否解释意图而非复述代码。
 
-An automated reviewer also comments on pull requests. Treat its findings as
-suggestions — it is configured to stay out of territory the linters already
-cover, but it is not authoritative.
+还有一位自动评审者会在 pull request 上留言。把它的发现当作建议——它被配置为不涉足 linter 已覆盖的领域，但它并不权威。
 
-## Rebase only on a conflict
+## 仅在冲突时 rebase
 
-A pull request does not need to be up to date with its base branch to merge.
-The merge agent merges an approved pull request that is behind `main`, so
-other pull requests merging first is not a reason to update yours, and the
-**Update branch** button no longer appears for that case.
+pull request 不需要与基分支保持最新就能合并。合并 agent 会合并落后于 `main` 的已批准 pull request，因此其他 pull request 先合并并不是更新你 PR 的理由，这种情况下 **Update branch** 按钮也不再出现。
 
-Rebase only when the pull request carries the `needs-rebase` label. The
-automation adds it when GitHub reports a merge conflict with the base branch and
-removes it once the conflict is gone; see
-[Repository automation](../maintainers/repository-automation.md).
+仅当 pull request 带有 `needs-rebase` 标签时才 rebase。当 GitHub 报告与基分支存在合并冲突时，自动化会添加该标签，冲突消失后移除；参见[仓库自动化](../maintainers/repository-automation.md)。
 
-Every push, a rebase included, dismisses existing approvals and removes the
-`lgtm` evidence, so the pull request needs a fresh review. An update that was not
-needed costs a review round and gains nothing.
+每次推送，包括 rebase，都会驳回现有批准并移除 `lgtm` 证据，因此 pull request 需要重新评审。一次并不需要的更新只会消耗一轮评审，毫无收益。
 
-## Related
+## 相关链接
 
-| To read about | See |
+| 想了解 | 参见 |
 |---|---|
-| Running the checks | [Testing](testing.md) |
-| Proposing a design first | [Enhancement Proposals](enhancements.md) |
-| Using maintainer commands and merge policy | [Repository automation](../maintainers/repository-automation.md) |
-| Getting a cluster up | [Local Development](local-development.md) |
+| 运行检查 | [测试](testing.md) |
+| 先提出设计 | [增强提案](enhancements.md) |
+| 使用维护者命令与合并策略 | [仓库自动化](../maintainers/repository-automation.md) |
+| 启动集群 | [本地开发](local-development.md) |

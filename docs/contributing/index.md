@@ -1,107 +1,88 @@
 ---
-title: Contributing
+title: 贡献指南
 ---
 
-# Contributing
+# 贡献指南
 
-## Prerequisites
+## 前置条件
 
-- Go matching the version in `go.mod`, with CGo enabled
-- A C toolchain — the mock NVML library is built through CGo
-- `docker`, `kind`, `tilt`, `helm`, `kubectl`
+- 与 `go.mod` 中版本一致的 Go，并启用 CGo
+- C 工具链——模拟 NVML 库通过 CGo 构建
+- `docker`、`kind`、`tilt`、`helm`、`kubectl`
 
-## The loop
+## 开发循环
 
 ```bash
-make cluster-create          # once
-tilt up -- --gpu-operator    # leave running; redeploys on save
+make cluster-create          # 仅一次
+tilt up -- --gpu-operator    # 保持运行；保存时自动重新部署
 
-make lint-fix                # before committing
+make lint-fix                # 提交前
 make test
 ```
 
-[Local Development](local-development.md) covers the cluster shapes and every
-Tilt flag. [Testing](testing.md) covers the gates.
+[本地开发](local-development.md)介绍各种集群形态和所有 Tilt 参数。[测试](testing.md)介绍各道关卡。
 
-## Where things live
+## 代码都放在哪里
 
 ```text
-cmd/            binaries: node-agent, nri-plugin, nvml-mock-ctl,
-                control-plane, check-fabric, generate-bridge
-internal/       node daemon and its simulators, NRI plugin, control-plane API
-pkg/gpu/        the mock NVML library, mock CUDA, allocation watcher
-shims/          LD_PRELOAD and execve shims
-deployments/    Helm charts, Dockerfiles, GPU profiles
-local/          Tiltfiles, Kind configs, local Helm values
-tests/          e2e suite, chart tests, integration tests
-enhancements/   Mokka Enhancement Proposals
-docs/           this site
+cmd/            二进制文件：node-agent、nri-plugin、nvml-mock-ctl、
+                control-plane、check-fabric、generate-bridge
+internal/       节点守护进程及其模拟器、NRI 插件、控制面 API
+pkg/gpu/        模拟 NVML 库、模拟 CUDA、分配监视器
+shims/          LD_PRELOAD 和 execve shims
+deployments/    Helm charts、Dockerfile、GPU profile
+local/          Tiltfile、Kind 配置、本地 Helm values
+tests/          e2e 套件、chart 测试、集成测试
+enhancements/   Mokka 增强提案
+docs/           本站
 ```
 
-The [architecture overview](../architecture.md) explains how those fit together
-at runtime; each component has its own page.
+[架构概览](../architecture.md)解释这些部分在运行时如何组合；每个组件都有自己的页面。
 
-## Common changes
+## 常见变更
 
-### Adding an NVML function
+### 添加 NVML 函数
 
-1. Implement the method on `ConfigurableDevice` in
-   `pkg/gpu/mocknvml/engine/device.go`, returning `ERROR_NOT_SUPPORTED` when
-   the profile does not configure the value.
-2. Add any new configuration fields to `engine/config_types.go`.
-3. Add the C-exported wrapper to the matching file under
-   `pkg/gpu/mocknvml/bridge/`.
-4. Run `make gen`. The generator scans for `//export` directives and drops the
-   stub it had been generating for that function.
-5. Test it.
+1. 在 `pkg/gpu/mocknvml/engine/device.go` 中为 `ConfigurableDevice` 实现该方法，当 profile 未配置该值时返回 `ERROR_NOT_SUPPORTED`。
+2. 把任何新增配置字段加入 `engine/config_types.go`。
+3. 在 `pkg/gpu/mocknvml/bridge/` 下对应的文件中添加 C 导出包装函数。
+4. 运行 `make gen`。生成器会扫描 `//export` 指令，并移除它此前为该函数生成的桩。
+5. 编写测试。
 
-The generator is driven by NVML's own header, so a hand-written implementation
-always replaces its stub — you never delete one by hand. See
-[Libraries and Shims](../components/libraries-and-shims.md) for how the layers fit.
+生成器由 NVML 自身的头文件驱动，因此手写实现总会替换掉它的桩——永远不需要手工删除。各层如何配合，参见[库与 Shims](../components/libraries-and-shims.md)。
 
-### Adding a GPU profile
+### 添加 GPU profile
 
-Profiles are YAML. The deployed ones live in
-`deployments/nvml-mock/helm/nvml-mock/profiles/` and are the source of truth;
-`pkg/gpu/mocknvml/configs/` holds standalone equivalents for running the library
-outside Kubernetes.
+Profile 是 YAML。已部署的 profile 位于 `deployments/nvml-mock/helm/nvml-mock/profiles/`，是事实来源；`pkg/gpu/mocknvml/configs/` 存放独立版本，用于在 Kubernetes 之外运行该库。
 
-Start from a capture of the real board where you can:
-[Capturing a real node](capturing-a-real-node.md) lists what to record and how
-to compare a profile with it.
+尽可能从真实板卡的采集数据入手：[采集真实节点](capturing-a-real-node.md)列出要记录的内容以及如何把 profile 与采集数据对比。
 
-Add the file, then deploy it with `tilt up -- --gpu-profile <name>` and check
-`nvidia-smi` reports what you intended. [Configuration](../configuration.md)
-documents every field.
+添加文件后，用 `tilt up -- --gpu-profile <name>` 部署，并检查 `nvidia-smi` 报告是否符合预期。[配置参考](../configuration.md)记录了每个字段。
 
-!!! note "Profiles have a drift guard"
-    `tests/e2e/go/profile` asserts derived expectations across **all** known
-    profiles regardless of which one you are running, so a malformed or
-    inconsistent profile fails the unit tests rather than a cluster run.
+!!! note "Profile 有防漂移保护"
+    `tests/e2e/go/profile` 会对**所有**已知 profile 断言派生期望，无论当前运行的是哪一个，因此格式错误或不一致的 profile 会在单元测试中失败，而不是等到集群运行时才暴露。
 
-### Debugging
+### 调试
 
 ```bash
-MOCK_NVML_DEBUG=1 nvidia-smi     # trace every NVML call the mock answers
+MOCK_NVML_DEBUG=1 nvidia-smi     # 跟踪 mock 应答的每一次 NVML 调用
 ```
 
-## Style
+## 风格
 
-- Simple, idiomatic Go. High cohesion, low coupling.
-- Errors are wrapped with context, handled, or logged — never silently
-  dropped. If ignoring one is correct, say why in a comment.
-- Comments explain intent where it is not obvious: *why*, not *what*. Write
-  them for someone reading the file in a year, not for the current review.
-- `testify/require` for assertions; `t.Parallel()` where the test allows it.
+- 简洁、地道的 Go。高内聚、低耦合。
+- 错误要带上下文包装、处理或记录，绝不静默丢弃。如果确实应当忽略，请在注释中说明原因。
+- 注释在意图不明显处解释意图：写*为什么*，而不是*是什么*。写给一年后读这个文件的人，而不是写给当前评审者。
+- 断言用 `testify/require`；测试允许时用 `t.Parallel()`。
 
-## Related
+## 相关链接
 
-| To read about | See |
+| 想了解 | 参见 |
 |---|---|
-| Bringing up a cluster | [Local Development](local-development.md) |
-| Running the gates | [Testing](testing.md) |
-| Reading NVLink fabric state off a node | [check-fabric](../tools/check-fabric.md) |
-| Regenerating the NVML bridge stubs | [generate-bridge](../tools/generate-bridge.md) |
-| Putting a behavior behind a feature gate | [Gating New Behavior](feature-gates.md) |
-| Proposing a design | [Enhancement Proposals](enhancements.md) |
-| Submitting the change | [Pull Requests](pull-requests.md) |
+| 启动集群 | [本地开发](local-development.md) |
+| 运行各道关卡 | [测试](testing.md) |
+| 从节点读取 NVLink fabric 状态 | [check-fabric](../tools/check-fabric.md) |
+| 重新生成 NVML 桥接桩 | [generate-bridge](../tools/generate-bridge.md) |
+| 把行为放到特性门控之后 | [为新行为加门控](feature-gates.md) |
+| 提出设计 | [增强提案](enhancements.md) |
+| 提交变更 | [Pull Request](pull-requests.md) |

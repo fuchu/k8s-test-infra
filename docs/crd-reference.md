@@ -3,18 +3,18 @@ SPDX-License-Identifier: Apache-2.0
 SPDX-FileCopyrightText: Copyright 2026 NVIDIA CORPORATION
 -->
 
-# API Reference
+# API 参考
 
-## Packages
+## 包
 - [mokka.nvidia.com/v1alpha1](#mokkanvidiacomv1alpha1)
 
 
 ## mokka.nvidia.com/v1alpha1
 
-Package v1alpha1 contains API types for the mokka.nvidia.com group.
+v1alpha1 包包含 mokka.nvidia.com API 组的类型。
 
 
-### Resource Types
+### 资源类型
 - [SGPUInventory](#sgpuinventory)
 - [SGPURack](#sgpurack)
 - [SGPURackProfile](#sgpurackprofile)
@@ -26,89 +26,89 @@ Package v1alpha1 contains API types for the mokka.nvidia.com group.
 
 
 
-CapabilityAttribute is a typed variant; set exactly one field.
+CapabilityAttribute 是一种带类型的变体；只设置一个字段。
 
 
 
-_Appears in:_
+_出现于：_
 - [GPUCapabilities](#gpucapabilities)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `bool` _boolean_ | Bool stores a boolean capability value. |  | Optional: \{\} <br /> |
-| `int` _integer_ | Int stores an integer capability value. |  | Optional: \{\} <br /> |
-| `string` _string_ | String stores a string capability value. |  | Optional: \{\} <br /> |
-| `strings` _string array_ | Strings stores a set of string capability values. |  | Optional: \{\} <br /> |
+| `bool` _boolean_ | Bool 存储布尔型能力值。 |  | Optional: \{\} <br /> |
+| `int` _integer_ | Int 存储整型能力值。 |  | Optional: \{\} <br /> |
+| `string` _string_ | String 存储字符串型能力值。 |  | Optional: \{\} <br /> |
+| `strings` _string array_ | Strings 存储一组字符串型能力值。 |  | Optional: \{\} <br /> |
 
 
 #### ClockRates
 
 
 
-ClockRates is a graphics/SM/memory/video clock tuple in MHz.
+ClockRates 是以 MHz 为单位的 graphics/SM/memory/video 时钟元组。
 
 
 
-_Appears in:_
+_出现于：_
 - [GPUClocks](#gpuclocks)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `graphics` _integer_ | Graphics is the graphics clock rate in MHz. |  | Optional: \{\} <br /> |
-| `sm` _integer_ | SM is the streaming-multiprocessor clock rate in MHz. |  | Optional: \{\} <br /> |
-| `memory` _integer_ | Memory is the memory clock rate in MHz. |  | Optional: \{\} <br /> |
-| `video` _integer_ | Video is the video clock rate in MHz. |  | Optional: \{\} <br /> |
+| `graphics` _integer_ | Graphics 是 graphics 时钟频率，单位 MHz。 |  | Optional: \{\} <br /> |
+| `sm` _integer_ | SM 是流多处理器时钟频率，单位 MHz。 |  | Optional: \{\} <br /> |
+| `memory` _integer_ | Memory 是显存时钟频率，单位 MHz。 |  | Optional: \{\} <br /> |
+| `video` _integer_ | Video 是视频时钟频率，单位 MHz。 |  | Optional: \{\} <br /> |
 
 
 #### ClocksTelemetry
 
 
 
-ClocksTelemetry reports current clock rates.
+ClocksTelemetry 报告当前时钟频率。
 
 
 
-_Appears in:_
+_出现于：_
 - [RuntimeTelemetry](#runtimetelemetry)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `graphicsMHz` _integer_ | GraphicsMHz is the simulated graphics clock rate in MHz. |  | Minimum: 0 <br />Optional: \{\} <br /> |
-| `smMHz` _integer_ | SMMHz is the simulated streaming-multiprocessor clock rate in MHz. |  | Minimum: 0 <br />Optional: \{\} <br /> |
-| `memoryMHz` _integer_ | MemoryMHz is the simulated memory clock rate in MHz. |  | Minimum: 0 <br />Optional: \{\} <br /> |
-| `videoMHz` _integer_ | VideoMHz is the simulated video clock rate in MHz. |  | Minimum: 0 <br />Optional: \{\} <br /> |
+| `graphicsMHz` _integer_ | GraphicsMHz 是模拟的 graphics 时钟频率，单位 MHz。 |  | Minimum: 0 <br />Optional: \{\} <br /> |
+| `smMHz` _integer_ | SMMHz 是模拟的流多处理器时钟频率，单位 MHz。 |  | Minimum: 0 <br />Optional: \{\} <br /> |
+| `memoryMHz` _integer_ | MemoryMHz 是模拟的显存时钟频率，单位 MHz。 |  | Minimum: 0 <br />Optional: \{\} <br /> |
+| `videoMHz` _integer_ | VideoMHz 是模拟的视频时钟频率，单位 MHz。 |  | Minimum: 0 <br />Optional: \{\} <br /> |
 
 
 #### ComputeCapability
 
 
 
-ComputeCapability is the CUDA compute capability.
+ComputeCapability 是 CUDA 计算能力。
 
 
 
-_Appears in:_
+_出现于：_
 - [GPUModel](#gpumodel)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `major` _integer_ | Major is the major CUDA compute capability version. |  |  |
-| `minor` _integer_ | Minor is the minor CUDA compute capability version. |  |  |
+| `major` _integer_ | Major 是 CUDA 计算能力的主版本号。 |  |  |
+| `minor` _integer_ | Minor 是 CUDA 计算能力的次版本号。 |  |  |
 
 
 #### DeviceState
 
-_Underlying type:_ _string_
+_底层类型：_ _string_
 
-DeviceState is a simulated GPU health state.
+DeviceState 是模拟的 GPU 健康状态。
 
-_Validation:_
+_校验：_
 - Enum: [Healthy Degraded Failed]
 
-_Appears in:_
+_出现于：_
 - [RuntimeState](#runtimestate)
 
-| Field | Description |
+| 字段 | 描述 |
 | --- | --- |
 | `Healthy` |  |
 | `Degraded` |  |
@@ -119,1130 +119,1118 @@ _Appears in:_
 
 
 
-FabricDomain is the fabric compute domain.
+FabricDomain 是 fabric 计算域。
 
 
 
-_Appears in:_
+_出现于：_
 - [GPUFabric](#gpufabric)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `scope` _string_ | Scope is the level at which GPUs share a fabric domain. |  | Enum: [Node Rack Cluster] <br />Optional: \{\} <br /> |
-| `gpuCount` _integer_ | GPUCount is the number of GPUs in the domain. |  | Optional: \{\} <br /> |
+| `scope` _string_ | Scope 是 GPU 共享 fabric 域的层级。 |  | Enum: [Node Rack Cluster] <br />Optional: \{\} <br /> |
+| `gpuCount` _integer_ | GPUCount 是该域中的 GPU 数量。 |  | Optional: \{\} <br /> |
 
 
 #### FabricSwitches
 
 
 
-FabricSwitches is fabric switches visible per node.
+FabricSwitches 是每个节点可见的 fabric 交换机。
 
 
 
-_Appears in:_
+_出现于：_
 - [GPUFabric](#gpufabric)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `visiblePerNode` _integer_ | VisiblePerNode is the number of fabric switches visible from each Node. |  | Optional: \{\} <br /> |
+| `visiblePerNode` _integer_ | VisiblePerNode 是从每个节点可见的 fabric 交换机数量。 |  | Optional: \{\} <br /> |
 
 
 #### GPUBoard
 
 
 
-GPUBoard is board-level identity.
+GPUBoard 是板卡级标识。
 
 
 
-_Appears in:_
+_出现于：_
 - [GPUModel](#gpumodel)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `partNumber` _string_ | PartNumber is the board part number reported for the GPU. |  | Optional: \{\} <br /> |
+| `partNumber` _string_ | PartNumber 是为 GPU 报告的板卡料号。 |  | Optional: \{\} <br /> |
 
 
 #### GPUCapabilities
 
 
 
-GPUCapabilities is GPU feature toggles and extensible attributes.
+GPUCapabilities 是 GPU 功能开关和可扩展属性。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPUGPUs](#sgpugpus)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `mig` _[MIGCapability](#migcapability)_ | MIG describes Multi-Instance GPU support. |  | Optional: \{\} <br /> |
-| `attributes` _object (keys:string, values:[CapabilityAttribute](#capabilityattribute))_ | Extensible capability flags keyed by qualified name. |  | Optional: \{\} <br /> |
+| `mig` _[MIGCapability](#migcapability)_ | MIG 描述对多实例 GPU 的支持。 |  | Optional: \{\} <br /> |
+| `attributes` _object (keys:string, values:[CapabilityAttribute](#capabilityattribute))_ | 以限定名作为键的可扩展能力标志。 |  | Optional: \{\} <br /> |
 
 
 #### GPUClocks
 
 
 
-GPUClocks is clock ceilings and per-memory-clock schedules.
+GPUClocks 是时钟上限和按显存时钟排列的调度表。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPUGPUs](#sgpugpus)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `maximumMHz` _[ClockRates](#clockrates)_ | MaximumMHz gives the maximum graphics, SM, memory, and video clock rates. |  | Optional: \{\} <br /> |
-| `supported` _[SupportedClocks](#supportedclocks) array_ | Supported lists graphics clock rates available at each memory clock rate. |  | Optional: \{\} <br /> |
+| `maximumMHz` _[ClockRates](#clockrates)_ | MaximumMHz 给出 graphics、SM、memory 和 video 的最大时钟频率。 |  | Optional: \{\} <br /> |
+| `supported` _[SupportedClocks](#supportedclocks) array_ | Supported 列出每种显存时钟频率下可用的 graphics 时钟频率。 |  | Optional: \{\} <br /> |
 
 
 #### GPUCores
 
 
 
-GPUCores is programmable core counts.
+GPUCores 是可编程核心数量。
 
 
 
-_Appears in:_
+_出现于：_
 - [GPUModel](#gpumodel)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `cuda` _integer_ | CUDA is the number of CUDA cores per GPU. |  | Optional: \{\} <br /> |
+| `cuda` _integer_ | CUDA 是每块 GPU 的 CUDA 核心数。 |  | Optional: \{\} <br /> |
 
 
 #### GPUFabric
 
 
 
-GPUFabric is NVLink/NVSwitch fabric.
+GPUFabric 是 NVLink/NVSwitch fabric。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPUTopology](#sgputopology)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `type` _string_ | Type names the GPU interconnect fabric. |  | Optional: \{\} <br /> |
-| `generation` _integer_ | Generation is the fabric generation. |  | Optional: \{\} <br /> |
-| `linksPerGPU` _integer_ | LinksPerGPU is the number of fabric links available per GPU. |  | Optional: \{\} <br /> |
-| `bandwidthPerLinkMBps` _integer_ | BandwidthPerLinkMBps is the bandwidth of each link in megabytes per second. |  | Optional: \{\} <br /> |
-| `c2cSupported` _boolean_ | C2CSupported indicates whether coherent CPU-to-GPU links are supported. |  | Optional: \{\} <br /> |
-| `domain` _[FabricDomain](#fabricdomain)_ | Domain describes the scope and size of the GPU fabric domain. |  | Optional: \{\} <br /> |
-| `switches` _[FabricSwitches](#fabricswitches)_ | Switches describes the fabric switches visible to each Node. |  | Optional: \{\} <br /> |
+| `type` _string_ | Type 命名 GPU 互连 fabric。 |  | Optional: \{\} <br /> |
+| `generation` _integer_ | Generation 是 fabric 的代际。 |  | Optional: \{\} <br /> |
+| `linksPerGPU` _integer_ | LinksPerGPU 是每块 GPU 可用的 fabric 链路数。 |  | Optional: \{\} <br /> |
+| `bandwidthPerLinkMBps` _integer_ | BandwidthPerLinkMBps 是每条链路的带宽，单位 MB/s。 |  | Optional: \{\} <br /> |
+| `c2cSupported` _boolean_ | C2CSupported 表示是否支持 CPU 到 GPU 的一致性链路。 |  | Optional: \{\} <br /> |
+| `domain` _[FabricDomain](#fabricdomain)_ | Domain 描述 GPU fabric 域的范围和大小。 |  | Optional: \{\} <br /> |
+| `switches` _[FabricSwitches](#fabricswitches)_ | Switches 描述每个节点可见的 fabric 交换机。 |  | Optional: \{\} <br /> |
 
 
 #### GPUFirmware
 
 
 
-GPUFirmware is firmware versions.
+GPUFirmware 是固件版本。
 
 
 
-_Appears in:_
+_出现于：_
 - [GPUModel](#gpumodel)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `vbiosVersion` _string_ | VBIOSVersion is the video BIOS version. |  | Optional: \{\} <br /> |
-| `gspVersion` _string_ | GSPVersion is the GPU System Processor firmware version. |  | Optional: \{\} <br /> |
-| `infoROM` _[InfoROM](#inforom)_ | InfoROM contains versions of the GPU information-ROM objects. |  | Optional: \{\} <br /> |
+| `vbiosVersion` _string_ | VBIOSVersion 是视频 BIOS 版本。 |  | Optional: \{\} <br /> |
+| `gspVersion` _string_ | GSPVersion 是 GPU 系统处理器固件版本。 |  | Optional: \{\} <br /> |
+| `infoROM` _[InfoROM](#inforom)_ | InfoROM 包含 GPU 信息 ROM 对象的版本。 |  | Optional: \{\} <br /> |
 
 
 #### GPUMemory
 
 
 
-GPUMemory is on-device memory.
+GPUMemory 是设备上显存。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPUGPUs](#sgpugpus)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `capacity` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#quantity-resource-api)_ | Capacity is the total device memory capacity. |  |  |
-| `reserved` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#quantity-resource-api)_ | Reserved is the amount of memory reserved from workloads. |  | Optional: \{\} <br /> |
-| `bar1Capacity` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#quantity-resource-api)_ | Bar1Capacity is the device BAR1 aperture size. |  | Optional: \{\} <br /> |
-| `busWidthBits` _integer_ | BusWidthBits is the memory bus width in bits. |  | Optional: \{\} <br /> |
+| `capacity` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#quantity-resource-api)_ | Capacity 是设备显存总容量。 |  |  |
+| `reserved` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#quantity-resource-api)_ | Reserved 是为工作负载预留的显存量。 |  | Optional: \{\} <br /> |
+| `bar1Capacity` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#quantity-resource-api)_ | Bar1Capacity 是设备的 BAR1 窗口大小。 |  | Optional: \{\} <br /> |
+| `busWidthBits` _integer_ | BusWidthBits 是显存总线宽度，单位比特。 |  | Optional: \{\} <br /> |
 
 
 #### GPUModel
 
 
 
-GPUModel is the vendor/product identity.
+GPUModel 是厂商/产品标识。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPUGPUs](#sgpugpus)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `vendor` _string_ | Vendor is the GPU manufacturer name. |  | Optional: \{\} <br /> |
-| `product` _string_ | Product is the vendor's product identifier. |  | Optional: \{\} <br /> |
-| `productName` _string_ | ProductName is the human-readable product name. |  | Optional: \{\} <br /> |
-| `architecture` _string_ | Architecture is the GPU architecture name. |  | Optional: \{\} <br /> |
-| `computeCapability` _[ComputeCapability](#computecapability)_ | ComputeCapability is the CUDA compute capability version. |  | Optional: \{\} <br /> |
-| `cores` _[GPUCores](#gpucores)_ | Cores contains programmable core counts. |  | Optional: \{\} <br /> |
-| `board` _[GPUBoard](#gpuboard)_ | Board contains board-level identity. |  | Optional: \{\} <br /> |
-| `firmware` _[GPUFirmware](#gpufirmware)_ | Firmware contains firmware and information-ROM versions. |  | Optional: \{\} <br /> |
+| `vendor` _string_ | Vendor 是 GPU 制造商名称。 |  | Optional: \{\} <br /> |
+| `product` _string_ | Product 是厂商的产品标识符。 |  | Optional: \{\} <br /> |
+| `productName` _string_ | ProductName 是可读的产品名称。 |  | Optional: \{\} <br /> |
+| `architecture` _string_ | Architecture 是 GPU 架构名称。 |  | Optional: \{\} <br /> |
+| `computeCapability` _[ComputeCapability](#computecapability)_ | ComputeCapability 是 CUDA 计算能力版本。 |  | Optional: \{\} <br /> |
+| `cores` _[GPUCores](#gpucores)_ | Cores 包含可编程核心数量。 |  | Optional: \{\} <br /> |
+| `board` _[GPUBoard](#gpuboard)_ | Board 包含板卡级标识。 |  | Optional: \{\} <br /> |
+| `firmware` _[GPUFirmware](#gpufirmware)_ | Firmware 包含固件和信息 ROM 版本。 |  | Optional: \{\} <br /> |
 
 
 #### GPUPCI
 
 
 
-GPUPCI is PCI identity and link characteristics.
+GPUPCI 是 PCI 标识和链路特性。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPUGPUs](#sgpugpus)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `vendorID` _string_ | VendorID is the PCI vendor identifier in hexadecimal. |  | Optional: \{\} <br /> |
-| `deviceID` _string_ | DeviceID is the PCI device identifier in hexadecimal. |  | Optional: \{\} <br /> |
-| `subsystemVendorID` _string_ | SubsystemVendorID is the PCI subsystem vendor identifier. |  | Optional: \{\} <br /> |
-| `subsystemDeviceID` _string_ | SubsystemDeviceID is the PCI subsystem device identifier. |  | Optional: \{\} <br /> |
-| `maxLink` _[PCILink](#pcilink)_ | MaxLink is the maximum supported PCIe generation and width. |  | Optional: \{\} <br /> |
+| `vendorID` _string_ | VendorID 是十六进制的 PCI 厂商标识符。 |  | Optional: \{\} <br /> |
+| `deviceID` _string_ | DeviceID 是十六进制的 PCI 设备标识符。 |  | Optional: \{\} <br /> |
+| `subsystemVendorID` _string_ | SubsystemVendorID 是 PCI 子系统厂商标识符。 |  | Optional: \{\} <br /> |
+| `subsystemDeviceID` _string_ | SubsystemDeviceID 是 PCI 子系统设备标识符。 |  | Optional: \{\} <br /> |
+| `maxLink` _[PCILink](#pcilink)_ | MaxLink 是支持的最大 PCIe 代际和宽度。 |  | Optional: \{\} <br /> |
 
 
 #### GPUPower
 
 
 
-GPUPower is the power envelope.
+GPUPower 是功耗包络。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPUGPUs](#sgpugpus)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `managementSupported` _boolean_ | ManagementSupported indicates whether power management is available. |  | Optional: \{\} <br /> |
-| `limitsMilliWatts` _[PowerLimits](#powerlimits)_ | LimitsMilliWatts gives the minimum, default, and maximum power limits. |  | Optional: \{\} <br /> |
+| `managementSupported` _boolean_ | ManagementSupported 表示是否可用功耗管理。 |  | Optional: \{\} <br /> |
+| `limitsMilliWatts` _[PowerLimits](#powerlimits)_ | LimitsMilliWatts 给出最小、默认和最大功耗限制。 |  | Optional: \{\} <br /> |
 
 
 #### GPUSlot
 
 
 
-GPUSlot pins one GPU to a PCI address + NUMA/root-complex/host CPU.
+GPUSlot 把一块 GPU 固定到 PCI 地址 + NUMA/root complex/宿主 CPU。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPUTopology](#sgputopology)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `index` _integer_ | Index is the zero-based GPU index on the Node. |  | Maximum: 63 <br />Minimum: 0 <br /> |
-| `pciAddress` _string_ | PCIAddress is the PCI bus address of this GPU. |  | Pattern: `^[0-9a-f]\{4\}:[0-9a-f]\{2\}:[0-9a-f]\{2\}\.[0-7]$` <br />Required: \{\} <br /> |
-| `rootComplex` _string_ | RootComplex identifies the PCI root complex connected to this GPU. |  | Pattern: `^pci[0-9a-f]\{4\}:[0-9a-f]\{2\}$` <br />Required: \{\} <br /> |
-| `numaNode` _integer_ | NumaNode is the host NUMA node associated with this GPU. |  | Optional: \{\} <br /> |
-| `hostProcessorIndex` _integer_ | HostProcessorIndex is the host CPU index associated with this GPU. |  | Optional: \{\} <br /> |
+| `index` _integer_ | Index 是节点上从零开始的 GPU 索引。 |  | Maximum: 63 <br />Minimum: 0 <br /> |
+| `pciAddress` _string_ | PCIAddress 是该 GPU 的 PCI 总线地址。 |  | Pattern: `^[0-9a-f]\{4\}:[0-9a-f]\{2\}:[0-9a-f]\{2\}\.[0-7]$` <br />Required: \{\} <br /> |
+| `rootComplex` _string_ | RootComplex 标识连接到该 GPU 的 PCI root complex。 |  | Pattern: `^pci[0-9a-f]\{4\}:[0-9a-f]\{2\}$` <br />Required: \{\} <br /> |
+| `numaNode` _integer_ | NumaNode 是与该 GPU 关联的宿主 NUMA 节点。 |  | Optional: \{\} <br /> |
+| `hostProcessorIndex` _integer_ | HostProcessorIndex 是与该 GPU 关联的宿主 CPU 索引。 |  | Optional: \{\} <br /> |
 
 
 #### GPUThermal
 
 
 
-GPUThermal is thermal thresholds.
+GPUThermal 是散热阈值。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPUGPUs](#sgpugpus)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `targetCelsius` _integer_ | TargetCelsius is the target GPU temperature in degrees Celsius. |  | Optional: \{\} <br /> |
-| `maxOperatingCelsius` _integer_ | MaxOperatingCelsius is the maximum rated operating temperature. |  | Optional: \{\} <br /> |
-| `slowdownThresholdCelsius` _integer_ | SlowdownThresholdCelsius is the temperature at which thermal slowdown begins. |  | Optional: \{\} <br /> |
-| `shutdownThresholdCelsius` _integer_ | ShutdownThresholdCelsius is the temperature at which shutdown is triggered. |  | Optional: \{\} <br /> |
+| `targetCelsius` _integer_ | TargetCelsius 是目标 GPU 温度，单位摄氏度。 |  | Optional: \{\} <br /> |
+| `maxOperatingCelsius` _integer_ | MaxOperatingCelsius 是额定最高工作温度。 |  | Optional: \{\} <br /> |
+| `slowdownThresholdCelsius` _integer_ | SlowdownThresholdCelsius 是开始散热降速的温度。 |  | Optional: \{\} <br /> |
+| `shutdownThresholdCelsius` _integer_ | ShutdownThresholdCelsius 是触发关机的温度。 |  | Optional: \{\} <br /> |
 
 
 #### HostCPU
 
 
 
-HostCPU is host CPU identity.
+HostCPU 是宿主 CPU 标识。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPUHost](#sgpuhost)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `vendor` _string_ | Vendor is the processor manufacturer. |  | Optional: \{\} <br /> |
-| `product` _string_ | Product is the processor product identifier. |  | Optional: \{\} <br /> |
-| `architecture` _string_ | Architecture is the host processor architecture. |  | Optional: \{\} <br /> |
-| `cores` _integer_ | Cores is the number of host CPU cores. |  | Optional: \{\} <br /> |
+| `vendor` _string_ | Vendor 是处理器制造商。 |  | Optional: \{\} <br /> |
+| `product` _string_ | Product 是处理器产品标识符。 |  | Optional: \{\} <br /> |
+| `architecture` _string_ | Architecture 是宿主处理器架构。 |  | Optional: \{\} <br /> |
+| `cores` _integer_ | Cores 是宿主 CPU 核心数。 |  | Optional: \{\} <br /> |
 
 
 #### HostMemory
 
 
 
-HostMemory is host memory capacity.
+HostMemory 是宿主内存容量。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPUHost](#sgpuhost)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `capacity` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#quantity-resource-api)_ | Capacity is the host memory capacity. |  |  |
-| `coherentWithGPU` _boolean_ | CoherentWithGPU indicates whether host and GPU memory are coherent. |  | Optional: \{\} <br /> |
+| `capacity` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#quantity-resource-api)_ | Capacity 是宿主内存容量。 |  |  |
+| `coherentWithGPU` _boolean_ | CoherentWithGPU 表示宿主内存与 GPU 显存是否一致。 |  | Optional: \{\} <br /> |
 
 
 #### InfoROM
 
 
 
-InfoROM is NVML inforom sub-object versions.
+InfoROM 是 NVML inforom 子对象的版本。
 
 
 
-_Appears in:_
+_出现于：_
 - [GPUFirmware](#gpufirmware)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `imageVersion` _string_ | ImageVersion is the information-ROM image version. |  | Optional: \{\} <br /> |
-| `oemObjectVersion` _string_ | OEMObjectVersion is the OEM information-ROM object version. |  | Optional: \{\} <br /> |
-| `eccObjectVersion` _string_ | ECCObjectVersion is the ECC information-ROM object version. |  | Optional: \{\} <br /> |
-| `powerObjectVersion` _string_ | PowerObjectVersion is the power information-ROM object version. |  | Optional: \{\} <br /> |
+| `imageVersion` _string_ | ImageVersion 是信息 ROM 镜像版本。 |  | Optional: \{\} <br /> |
+| `oemObjectVersion` _string_ | OEMObjectVersion 是 OEM 信息 ROM 对象版本。 |  | Optional: \{\} <br /> |
+| `eccObjectVersion` _string_ | ECCObjectVersion 是 ECC 信息 ROM 对象版本。 |  | Optional: \{\} <br /> |
+| `powerObjectVersion` _string_ | PowerObjectVersion 是功耗信息 ROM 对象版本。 |  | Optional: \{\} <br /> |
 
 
 #### InventoryCapacity
 
 
 
-InventoryCapacity is realized rack/node/GPU counts.
+InventoryCapacity 是已实现的机架/节点/GPU 数量。
 
 
 
-_Appears in:_
+_出现于：_
 - [RackGroupStatus](#rackgroupstatus)
 - [SGPUInventoryStatus](#sgpuinventorystatus)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `racks` _integer_ | Racks is the number of materialized racks. |  |  |
-| `nodes` _integer_ | Nodes is the number of logical Nodes across those racks. |  |  |
-| `gpus` _integer_ | GPUs is the number of simulated GPUs across those Nodes. |  |  |
+| `racks` _integer_ | Racks 是已物化的机架数量。 |  |  |
+| `nodes` _integer_ | Nodes 是这些机架中的逻辑节点数量。 |  |  |
+| `gpus` _integer_ | GPUs 是这些节点中的模拟 GPU 数量。 |  |  |
 
 
 #### InventoryUsage
 
 
 
-InventoryUsage summarizes eligible placement Nodes, bound rack slots, and pending allocations.
+InventoryUsage 汇总符合条件的放置节点、已绑定的机架槽位和待处理的分配。
 
 
 
-_Appears in:_
+_出现于：_
 - [RackGroupStatus](#rackgroupstatus)
 - [SGPUInventoryStatus](#sgpuinventorystatus)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `requestedNodes` _integer_ | RequestedNodes counts eligible Nodes matching placement selectors. Inventory totals<br />deduplicate matches across groups; per-group values count each group's matches. |  |  |
-| `allocatedNodes` _integer_ | AllocatedNodes counts rack Node slots with a live matching Kubernetes Node binding. |  |  |
-| `availableNodes` _integer_ | AvailableNodes is remaining capacity after bound rack slots, never below zero. |  |  |
-| `pendingNodes` _integer_ | PendingNodes counts eligible placement requests awaiting capacity in one matching group. |  |  |
+| `requestedNodes` _integer_ | RequestedNodes 统计匹配放置选择器的符合条件的节点。清单总量<br />在各组之间对匹配去重；每组的数值统计该组自身的匹配。 |  |  |
+| `allocatedNodes` _integer_ | AllocatedNodes 统计具有有效匹配的 Kubernetes 节点绑定的机架节点槽位。 |  |  |
+| `availableNodes` _integer_ | AvailableNodes 是扣除已绑定机架槽位后的剩余容量，永不低于零。 |  |  |
+| `pendingNodes` _integer_ | PendingNodes 统计在某一匹配组中等待容量的符合条件的放置请求。 |  |  |
 
 
 #### MIGCapability
 
 
 
-MIGCapability is MIG partitioning support.
+MIGCapability 是 MIG 分区支持。
 
 
 
-_Appears in:_
+_出现于：_
 - [GPUCapabilities](#gpucapabilities)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `supported` _boolean_ | Supported indicates whether MIG is available on the GPU. |  | Optional: \{\} <br /> |
-| `maxGPUInstances` _integer_ | MaxGPUInstances is the maximum number of GPU instances supported. |  | Optional: \{\} <br /> |
+| `supported` _boolean_ | Supported 表示该 GPU 上是否可用 MIG。 |  | Optional: \{\} <br /> |
+| `maxGPUInstances` _integer_ | MaxGPUInstances 是支持的最大 GPU 实例数。 |  | Optional: \{\} <br /> |
 
 
 #### NetworkTopology
 
 
 
-NetworkTopology is out-of-band adapters.
+NetworkTopology 是带外适配器。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPUTopology](#sgputopology)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `type` _string_ | Type names the out-of-band network adapter type. |  | Optional: \{\} <br /> |
-| `adapterModel` _string_ | AdapterModel is the adapter model name. |  | Optional: \{\} <br /> |
-| `firmwareVersion` _string_ | FirmwareVersion is the adapter firmware version. |  | Optional: \{\} <br /> |
-| `linkSpeedGbps` _integer_ | LinkSpeedGbps is the adapter link speed in gigabits per second. |  | Optional: \{\} <br /> |
-| `adaptersPerGPU` _integer_ | AdaptersPerGPU is the number of network adapters associated with each GPU. |  | Optional: \{\} <br /> |
+| `type` _string_ | Type 命名带外网络适配器类型。 |  | Optional: \{\} <br /> |
+| `adapterModel` _string_ | AdapterModel 是适配器型号名称。 |  | Optional: \{\} <br /> |
+| `firmwareVersion` _string_ | FirmwareVersion 是适配器固件版本。 |  | Optional: \{\} <br /> |
+| `linkSpeedGbps` _integer_ | LinkSpeedGbps 是适配器链路速率，单位 Gbit/s。 |  | Optional: \{\} <br /> |
+| `adaptersPerGPU` _integer_ | AdaptersPerGPU 是与每块 GPU 关联的网络适配器数量。 |  | Optional: \{\} <br /> |
 
 
 #### PCILink
 
 
 
-PCILink is the PCIe max link generation and width.
+PCILink 是 PCIe 最大链路代际和宽度。
 
 
 
-_Appears in:_
+_出现于：_
 - [GPUPCI](#gpupci)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `generation` _integer_ | Generation is the maximum PCIe generation. |  | Optional: \{\} <br /> |
-| `width` _integer_ | Width is the maximum PCIe link width in lanes. |  | Optional: \{\} <br /> |
+| `generation` _integer_ | Generation 是最大 PCIe 代际。 |  | Optional: \{\} <br /> |
+| `width` _integer_ | Width 是最大 PCIe 链路宽度，单位通道。 |  | Optional: \{\} <br /> |
 
 
 #### PercentRange
 
 
 
-PercentRange is a min/max percentage bound. Both bounds are required, so an
-override replaces an inherited range whole.
+PercentRange 是最小/最大百分比边界。两个边界都是必需的，因此覆盖会整体替换继承的范围。
 
 
 
-_Appears in:_
+_出现于：_
 - [UtilizationPattern](#utilizationpattern)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `minimum` _integer_ | Minimum is the lower utilization percentage bound. |  | Maximum: 100 <br />Minimum: 0 <br /> |
-| `maximum` _integer_ | Maximum is the upper utilization percentage bound. |  | Maximum: 100 <br />Minimum: 0 <br /> |
+| `minimum` _integer_ | Minimum 是利用率百分比下界。 |  | Maximum: 100 <br />Minimum: 0 <br /> |
+| `maximum` _integer_ | Maximum 是利用率百分比上界。 |  | Maximum: 100 <br />Minimum: 0 <br /> |
 
 
 #### PolicyTargetRef
 
 
 
-PolicyTargetRef selects the simulated GPUs a policy applies to. Each listed
-axis narrows the one above it, and an omitted axis selects every index. The
-deepest listed axis is the policy's scope: inventory, rack group, rack, Node,
-or GPU. A narrower scope overrides a broader one field by field. Every
-listed rack group must exist in the inventory, and every listed index must
-exist in at least one selected rack group.
+PolicyTargetRef 选择策略所适用的模拟 GPU。列出的每个维度都会收窄其上一级，省略的维度则选择所有索引。列出的最深维度即策略的作用域：清单、机架组、机架、节点或 GPU。较窄的作用域按字段覆盖较宽的。列出的每个机架组都必须存在于清单中，且每个列出的索引都必须至少存在于一个所选机架组中。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPURuntimePolicySpec](#sgpuruntimepolicyspec)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `group` _string_ | Group is the API group containing the target resource. |  | Enum: [mokka.nvidia.com] <br /> |
-| `kind` _string_ | Kind is the target resource kind. |  | Enum: [SGPUInventory] <br /> |
-| `name` _string_ | Name is the name of the target SGPUInventory. |  | MinLength: 1 <br /> |
-| `rackGroups` _string array_ | RackGroups optionally limits the policy to these rack-group IDs. |  | MaxItems: 64 <br />MinItems: 1 <br />Optional: \{\} <br /> |
-| `rackIndexes` _integer array_ | RackIndexes optionally limits the policy to these rack indexes. |  | MaxItems: 64 <br />MinItems: 1 <br />items:Minimum: 0 <br />Optional: \{\} <br /> |
-| `nodeIndexes` _integer array_ | NodeIndexes optionally limits the policy to these logical Node indexes. |  | MaxItems: 64 <br />MinItems: 1 <br />items:Minimum: 0 <br />Optional: \{\} <br /> |
-| `gpuIndexes` _integer array_ | GPUIndexes optionally limits the policy to these GPU indexes. |  | MaxItems: 64 <br />MinItems: 1 <br />items:Minimum: 0 <br />Optional: \{\} <br /> |
+| `group` _string_ | Group 是包含目标资源的 API 组。 |  | Enum: [mokka.nvidia.com] <br /> |
+| `kind` _string_ | Kind 是目标资源的种类。 |  | Enum: [SGPUInventory] <br /> |
+| `name` _string_ | Name 是目标 SGPUInventory 的名称。 |  | MinLength: 1 <br /> |
+| `rackGroups` _string array_ | RackGroups 可选地把策略限制到这些机架组 ID。 |  | MaxItems: 64 <br />MinItems: 1 <br />Optional: \{\} <br /> |
+| `rackIndexes` _integer array_ | RackIndexes 可选地把策略限制到这些机架索引。 |  | MaxItems: 64 <br />MinItems: 1 <br />items:Minimum: 0 <br />Optional: \{\} <br /> |
+| `nodeIndexes` _integer array_ | NodeIndexes 可选地把策略限制到这些逻辑节点索引。 |  | MaxItems: 64 <br />MinItems: 1 <br />items:Minimum: 0 <br />Optional: \{\} <br /> |
+| `gpuIndexes` _integer array_ | GPUIndexes 可选地把策略限制到这些 GPU 索引。 |  | MaxItems: 64 <br />MinItems: 1 <br />items:Minimum: 0 <br />Optional: \{\} <br /> |
 
 
 #### PowerLimits
 
 
 
-PowerLimits is min/default/max power caps in milliwatts.
+PowerLimits 是以毫瓦为单位的最小/默认/最大功耗上限。
 
 
 
-_Appears in:_
+_出现于：_
 - [GPUPower](#gpupower)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `minimum` _integer_ | Minimum is the minimum power limit in milliwatts. |  | Optional: \{\} <br /> |
-| `default` _integer_ | Default is the default power limit in milliwatts. |  | Optional: \{\} <br /> |
-| `maximum` _integer_ | Maximum is the maximum power limit in milliwatts. |  | Optional: \{\} <br /> |
+| `minimum` _integer_ | Minimum 是以毫瓦为单位的最小功耗限制。 |  | Optional: \{\} <br /> |
+| `default` _integer_ | Default 是以毫瓦为单位的默认功耗限制。 |  | Optional: \{\} <br /> |
+| `maximum` _integer_ | Maximum 是以毫瓦为单位的最大功耗限制。 |  | Optional: \{\} <br /> |
 
 
 #### PowerTelemetry
 
 
 
-PowerTelemetry drives synthetic power draw.
+PowerTelemetry 驱动合成功耗。
 
 
 
-_Appears in:_
+_出现于：_
 - [RuntimeTelemetry](#runtimetelemetry)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `mode` _string_ | Mode selects a constant or generated power draw. |  | Enum: [Fixed Pattern] <br />Optional: \{\} <br /> |
-| `drawMilliWatts` _integer_ | DrawMilliWatts is the simulated GPU power draw in milliwatts. |  | Minimum: 0 <br />Optional: \{\} <br /> |
+| `mode` _string_ | Mode 选择恒定或生成的功耗。 |  | Enum: [Fixed Pattern] <br />Optional: \{\} <br /> |
+| `drawMilliWatts` _integer_ | DrawMilliWatts 是模拟的 GPU 功耗，单位毫瓦。 |  | Minimum: 0 <br />Optional: \{\} <br /> |
 
 
 #### ProfileReference
 
 
 
-ProfileReference targets an SGPURackProfile by name.
+ProfileReference 按名称指向一个 SGPURackProfile。
 
 
 
-_Appears in:_
+_出现于：_
 - [RackGroup](#rackgroup)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `name` _string_ | Name is the name of the SGPURackProfile to use. |  | MinLength: 1 <br /> |
+| `name` _string_ | Name 是要使用的 SGPURackProfile 名称。 |  | MinLength: 1 <br /> |
 
 
 #### RackGroup
 
 
 
-RackGroup is a homogeneous group of racks sharing a profile.
+RackGroup 是共享一个 profile 的同构机架组。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPUInventorySpec](#sgpuinventoryspec)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `id` _string_ | ID uniquely identifies this group within its inventory. |  | MaxLength: 63 <br />MinLength: 1 <br /> |
-| `count` _integer_ | Count is the number of racks to materialize from this group. |  | Maximum: 100000 <br />Minimum: 1 <br /> |
-| `profileRef` _[ProfileReference](#profilereference)_ | ProfileRef names the rack profile used to materialize each rack. |  |  |
-| `placement` _[RackPlacement](#rackplacement)_ | Placement optionally restricts the Nodes eligible for this rack group. |  | Optional: \{\} <br /> |
+| `id` _string_ | ID 在其清单中唯一标识该组。 |  | MaxLength: 63 <br />MinLength: 1 <br /> |
+| `count` _integer_ | Count 是从该组物化的机架数量。 |  | Maximum: 100000 <br />Minimum: 1 <br /> |
+| `profileRef` _[ProfileReference](#profilereference)_ | ProfileRef 命名用于物化每个机架的机架 profile。 |  |  |
+| `placement` _[RackPlacement](#rackplacement)_ | Placement 可选地限制该机架组可用的节点。 |  | Optional: \{\} <br /> |
 
 
 #### RackGroupStatus
 
 
 
-RackGroupStatus is the per-group Capacity + Usage projection.
+RackGroupStatus 是每组的容量 + 使用量投影。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPUInventoryStatus](#sgpuinventorystatus)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `id` _string_ | ID identifies the rack group summarized by this status. |  |  |
-| `profileName` _string_ | ProfileName is the name of the profile used to materialize the group. |  |  |
-| `capacity` _[InventoryCapacity](#inventorycapacity)_ | Capacity is the realized capacity for this group. |  |  |
-| `usage` _[InventoryUsage](#inventoryusage)_ | Usage summarizes Node allocation for this group. |  |  |
+| `id` _string_ | ID 标识此状态所汇总的机架组。 |  |  |
+| `profileName` _string_ | ProfileName 是用于物化该组的 profile 名称。 |  |  |
+| `capacity` _[InventoryCapacity](#inventorycapacity)_ | Capacity 是该组已实现的容量。 |  |  |
+| `usage` _[InventoryUsage](#inventoryusage)_ | Usage 汇总该组的节点分配情况。 |  |  |
 
 
 #### RackPlacement
 
 
 
-RackPlacement constrains which nodes a rack group may materialize on.
+RackPlacement 约束机架组可以在哪些节点上物化。
 
 
 
-_Appears in:_
+_出现于：_
 - [RackGroup](#rackgroup)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `nodeSelector` _[LabelSelector](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#labelselector-v1-meta)_ | NodeSelector restricts placement to Nodes matching these labels. |  | Optional: \{\} <br /> |
+| `nodeSelector` _[LabelSelector](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#labelselector-v1-meta)_ | NodeSelector 把放置限制到匹配这些标签的节点。 |  | Optional: \{\} <br /> |
 
 
 #### RuntimeModes
 
 
 
-RuntimeModes is the persistent NVML/CUDA mode settings.
+RuntimeModes 是持久化的 NVML/CUDA 模式设置。
 
 
 
-_Appears in:_
+_出现于：_
 - [RuntimeState](#runtimestate)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `persistence` _string_ | Persistence controls the simulated persistence mode. |  | Enum: [Enabled Disabled] <br />Optional: \{\} <br /> |
-| `compute` _string_ | Compute selects the simulated compute mode. |  | Enum: [Default Exclusive Prohibited] <br />Optional: \{\} <br /> |
-| `mig` _string_ | MIG controls whether Multi-Instance GPU mode is enabled. |  | Enum: [Enabled Disabled] <br />Optional: \{\} <br /> |
-| `ecc` _string_ | ECC controls whether error-correcting code is enabled. |  | Enum: [Enabled Disabled] <br />Optional: \{\} <br /> |
-| `accounting` _string_ | Accounting controls whether GPU accounting mode is enabled. |  | Enum: [Enabled Disabled] <br />Optional: \{\} <br /> |
+| `persistence` _string_ | Persistence 控制模拟的 persistence 模式。 |  | Enum: [Enabled Disabled] <br />Optional: \{\} <br /> |
+| `compute` _string_ | Compute 选择模拟的 compute 模式。 |  | Enum: [Default Exclusive Prohibited] <br />Optional: \{\} <br /> |
+| `mig` _string_ | MIG 控制是否启用多实例 GPU 模式。 |  | Enum: [Enabled Disabled] <br />Optional: \{\} <br /> |
+| `ecc` _string_ | ECC 控制是否启用纠错码。 |  | Enum: [Enabled Disabled] <br />Optional: \{\} <br /> |
+| `accounting` _string_ | Accounting 控制是否启用 GPU 计费模式。 |  | Enum: [Enabled Disabled] <br />Optional: \{\} <br /> |
 
 
 #### RuntimeState
 
 
 
-RuntimeState is the effective runtime settings of a simulated GPU.
-Sparse: omitted fields inherit; explicit zero is a set value.
+RuntimeState 是模拟 GPU 的有效运行时设置。稀疏：省略的字段继承；显式零是设定值。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPURackProfileDefaults](#sgpurackprofiledefaults)
 - [SGPURuntimePolicySpec](#sgpuruntimepolicyspec)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `deviceState` _[DeviceState](#devicestate)_ | DeviceState is the simulated health state of the GPU. |  | Enum: [Healthy Degraded Failed] <br />Optional: \{\} <br /> |
-| `modes` _[RuntimeModes](#runtimemodes)_ | Modes contains persistent NVML/CUDA mode settings. |  | Optional: \{\} <br /> |
-| `telemetry` _[RuntimeTelemetry](#runtimetelemetry)_ | Telemetry contains synthetic utilization, power, temperature, and clock values. |  | Optional: \{\} <br /> |
+| `deviceState` _[DeviceState](#devicestate)_ | DeviceState 是 GPU 的模拟健康状态。 |  | Enum: [Healthy Degraded Failed] <br />Optional: \{\} <br /> |
+| `modes` _[RuntimeModes](#runtimemodes)_ | Modes 包含持久化的 NVML/CUDA 模式设置。 |  | Optional: \{\} <br /> |
+| `telemetry` _[RuntimeTelemetry](#runtimetelemetry)_ | Telemetry 包含合成的利用率、功耗、温度和时钟值。 |  | Optional: \{\} <br /> |
 
 
 #### RuntimeTelemetry
 
 
 
-RuntimeTelemetry is the synthetic NVML telemetry.
+RuntimeTelemetry 是合成的 NVML 遥测。
 
 
 
-_Appears in:_
+_出现于：_
 - [RuntimeState](#runtimestate)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `performanceState` _string_ | NVML P-state, e.g. "P0". |  | Pattern: `^P[0-9]+$` <br />Optional: \{\} <br /> |
-| `utilization` _[UtilizationTelemetry](#utilizationtelemetry)_ | Utilization defines synthetic GPU and memory utilization values. |  | Optional: \{\} <br /> |
-| `power` _[PowerTelemetry](#powertelemetry)_ | Power defines synthetic power draw values. |  | Optional: \{\} <br /> |
-| `temperature` _[TemperatureTelemetry](#temperaturetelemetry)_ | Temperature defines synthetic GPU and memory temperature values. |  | Optional: \{\} <br /> |
-| `clocks` _[ClocksTelemetry](#clockstelemetry)_ | Clocks defines the current simulated clock rates. |  | Optional: \{\} <br /> |
+| `performanceState` _string_ | NVML P-state，例如 "P0"。 |  | Pattern: `^P[0-9]+$` <br />Optional: \{\} <br /> |
+| `utilization` _[UtilizationTelemetry](#utilizationtelemetry)_ | Utilization 定义合成的 GPU 和显存利用率值。 |  | Optional: \{\} <br /> |
+| `power` _[PowerTelemetry](#powertelemetry)_ | Power 定义合成的功耗值。 |  | Optional: \{\} <br /> |
+| `temperature` _[TemperatureTelemetry](#temperaturetelemetry)_ | Temperature 定义合成的 GPU 和显存温度值。 |  | Optional: \{\} <br /> |
+| `clocks` _[ClocksTelemetry](#clockstelemetry)_ | Clocks 定义当前模拟的时钟频率。 |  | Optional: \{\} <br /> |
 
 
 #### SGPUGPUs
 
 
 
-SGPUGPUs is the shared template for every GPU on the node.
+SGPUGPUs 是节点上每块 GPU 的共享模板。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPUNode](#sgpunode)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `count` _integer_ | Count is the number of GPUs exposed on each Node. |  | Maximum: 64 <br />Minimum: 1 <br /> |
-| `model` _[GPUModel](#gpumodel)_ | Model describes the GPU vendor, product, and architecture. |  |  |
-| `memory` _[GPUMemory](#gpumemory)_ | Memory describes device memory capacity and bus width. |  |  |
-| `pci` _[GPUPCI](#gpupci)_ | PCI describes device identifiers and maximum link properties. |  |  |
-| `power` _[GPUPower](#gpupower)_ | Power describes power-management support and device limits. |  | Optional: \{\} <br /> |
-| `thermal` _[GPUThermal](#gputhermal)_ | Thermal describes device temperature thresholds. |  | Optional: \{\} <br /> |
-| `clocks` _[GPUClocks](#gpuclocks)_ | Clocks describes maximum and supported device clock rates. |  | Optional: \{\} <br /> |
-| `capabilities` _[GPUCapabilities](#gpucapabilities)_ | Capabilities describes MIG support and additional named capabilities. |  | Optional: \{\} <br /> |
+| `count` _integer_ | Count 是每个节点上暴露的 GPU 数量。 |  | Maximum: 64 <br />Minimum: 1 <br /> |
+| `model` _[GPUModel](#gpumodel)_ | Model 描述 GPU 的厂商、产品和架构。 |  |  |
+| `memory` _[GPUMemory](#gpumemory)_ | Memory 描述设备显存容量和总线宽度。 |  |  |
+| `pci` _[GPUPCI](#gpupci)_ | PCI 描述设备标识符和最大链路属性。 |  |  |
+| `power` _[GPUPower](#gpupower)_ | Power 描述功耗管理支持和设备限制。 |  | Optional: \{\} <br /> |
+| `thermal` _[GPUThermal](#gputhermal)_ | Thermal 描述设备温度阈值。 |  | Optional: \{\} <br /> |
+| `clocks` _[GPUClocks](#gpuclocks)_ | Clocks 描述最大和支持的设备时钟频率。 |  | Optional: \{\} <br /> |
+| `capabilities` _[GPUCapabilities](#gpucapabilities)_ | Capabilities 描述 MIG 支持和其他命名能力。 |  | Optional: \{\} <br /> |
 
 
 #### SGPUHost
 
 
 
-SGPUHost is host CPU + memory.
+SGPUHost 是宿主 CPU + 内存。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPUNode](#sgpunode)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `cpu` _[HostCPU](#hostcpu)_ | CPU describes the host processor presented by the simulated Node. |  | Optional: \{\} <br /> |
-| `memory` _[HostMemory](#hostmemory)_ | Memory describes host memory presented by the simulated Node. |  | Optional: \{\} <br /> |
+| `cpu` _[HostCPU](#hostcpu)_ | CPU 描述模拟节点所呈现的宿主处理器。 |  | Optional: \{\} <br /> |
+| `memory` _[HostMemory](#hostmemory)_ | Memory 描述模拟节点所呈现的宿主内存。 |  | Optional: \{\} <br /> |
 
 
 #### SGPUInventory
 
 
 
-SGPUInventory is a set of simulated GPU racks to distribute across CPU nodes.
+SGPUInventory 是要分布到 CPU 节点上的一组模拟 GPU 机架。
 
 
 
 
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
 | `apiVersion` _string_ | `mokka.nvidia.com/v1alpha1` | | |
 | `kind` _string_ | `SGPUInventory` | | |
-| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
-| `spec` _[SGPUInventorySpec](#sgpuinventoryspec)_ | Spec defines the simulated rack groups managed by this inventory. |  |  |
-| `status` _[SGPUInventoryStatus](#sgpuinventorystatus)_ | Status reports the capacity and usage currently realized by the controller. |  | Optional: \{\} <br /> |
+| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#objectmeta-v1-meta)_ | 有关 `metadata` 的字段，请参阅 Kubernetes API 文档。 |  |  |
+| `spec` _[SGPUInventorySpec](#sgpuinventoryspec)_ | Spec 定义该清单管理的模拟机架组。 |  |  |
+| `status` _[SGPUInventoryStatus](#sgpuinventorystatus)_ | Status 报告控制器当前已实现的容量和使用量。 |  | Optional: \{\} <br /> |
 
 
 #### SGPUInventorySpec
 
 
 
-SGPUInventorySpec is the desired rack composition.
+SGPUInventorySpec 是期望的机架组成。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPUInventory](#sgpuinventory)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `rackGroups` _[RackGroup](#rackgroup) array_ | RackGroups declares homogeneous sets of racks. One group can expand to<br />many racks; the controller admits at most 64 groups across all Inventories. |  | MaxItems: 64 <br />MinItems: 1 <br /> |
+| `rackGroups` _[RackGroup](#rackgroup) array_ | RackGroups 声明同构的机架集合。一个组可以展开为<br />多个机架；控制器在所有清单中最多接纳 64 个组。 |  | MaxItems: 64 <br />MinItems: 1 <br /> |
 
 
 #### SGPUInventoryStatus
 
 
 
-SGPUInventoryStatus is the Control Plane view of realized capacity and usage.
+SGPUInventoryStatus 是控制面对已实现容量和使用量的视图。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPUInventory](#sgpuinventory)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `rackGroupsSummary` _string_ | RackGroupsSummary is a comma-joined rendering of rack-group IDs. |  | Optional: \{\} <br /> |
-| `capacity` _[InventoryCapacity](#inventorycapacity)_ | Capacity is the total rack, Node, and GPU capacity realized by this inventory. |  | Optional: \{\} <br /> |
-| `usage` _[InventoryUsage](#inventoryusage)_ | Usage summarizes requested and allocated Nodes across the inventory. |  | Optional: \{\} <br /> |
-| `rackGroups` _[RackGroupStatus](#rackgroupstatus) array_ | RackGroups contains per-group capacity and usage summaries. |  | Optional: \{\} <br /> |
-| `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#condition-v1-meta) array_ | Conditions report the latest inventory acceptance and programming results. |  | Optional: \{\} <br /> |
+| `rackGroupsSummary` _string_ | RackGroupsSummary 是机架组 ID 的逗号连接呈现。 |  | Optional: \{\} <br /> |
+| `capacity` _[InventoryCapacity](#inventorycapacity)_ | Capacity 是该清单已实现的机架、节点和 GPU 总容量。 |  | Optional: \{\} <br /> |
+| `usage` _[InventoryUsage](#inventoryusage)_ | Usage 汇总整个清单中请求和已分配的节点。 |  | Optional: \{\} <br /> |
+| `rackGroups` _[RackGroupStatus](#rackgroupstatus) array_ | RackGroups 包含每组的容量和使用量汇总。 |  | Optional: \{\} <br /> |
+| `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#condition-v1-meta) array_ | Conditions 报告最近的清单接纳和编程结果。 |  | Optional: \{\} <br /> |
 
 
 #### SGPUNode
 
 
 
-SGPUNode is a homogeneous logical node in the rack.
+SGPUNode 是机架中的一个同构逻辑节点。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPURackProfileSpec](#sgpurackprofilespec)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `gpus` _[SGPUGPUs](#sgpugpus)_ | GPUs defines the homogeneous simulated GPU set on each Node. |  |  |
-| `host` _[SGPUHost](#sgpuhost)_ | Host describes the CPU and memory presented by each Node. |  | Optional: \{\} <br /> |
-| `topology` _[SGPUTopology](#sgputopology)_ | Topology describes PCIe slots and optional GPU/network fabrics. |  | Required: \{\} <br /> |
+| `gpus` _[SGPUGPUs](#sgpugpus)_ | GPUs 定义每个节点上的同构模拟 GPU 集合。 |  |  |
+| `host` _[SGPUHost](#sgpuhost)_ | Host 描述每个节点呈现的 CPU 和内存。 |  | Optional: \{\} <br /> |
+| `topology` _[SGPUTopology](#sgputopology)_ | Topology 描述 PCIe 插槽和可选的 GPU/网络 fabric。 |  | Required: \{\} <br /> |
 
 
 #### SGPUNodeReference
 
 
 
-SGPUNodeReference identifies an exact Kubernetes Node instance.
+SGPUNodeReference 标识一个确切的 Kubernetes 节点实例。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPURackNode](#sgpuracknode)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `name` _string_ | Name is the Kubernetes Node name. |  | MinLength: 1 <br /> |
-| `uid` _[UID](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#uid-types-pkg)_ | UID distinguishes this Node instance from a replacement with the same name. |  |  |
+| `name` _string_ | Name 是 Kubernetes 节点名称。 |  | MinLength: 1 <br /> |
+| `uid` _[UID](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#uid-types-pkg)_ | UID 用于把该节点实例与同名替代者区分开。 |  |  |
 
 
 #### SGPURack
 
 
 
-SGPURack is the controller-owned materialization of one inventory rack.
-Its controller owner reference identifies the inventory pinned by
-spec.inventoryRef.
+SGPURack 是由控制器拥有的单个清单机架的物化。其控制器所有者引用标识由 spec.inventoryRef 固定的清单。
 
 
 
 
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
 | `apiVersion` _string_ | `mokka.nvidia.com/v1alpha1` | | |
 | `kind` _string_ | `SGPURack` | | |
-| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
-| `spec` _[SGPURackSpec](#sgpurackspec)_ | Spec is the rendered rack definition and its logical Node bindings. |  |  |
-| `status` _[SGPURackStatus](#sgpurackstatus)_ | Status summarizes the rack's durable Node assignments. |  | Optional: \{\} <br /> |
+| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#objectmeta-v1-meta)_ | 有关 `metadata` 的字段，请参阅 Kubernetes API 文档。 |  |  |
+| `spec` _[SGPURackSpec](#sgpurackspec)_ | Spec 是渲染后的机架定义及其逻辑节点绑定。 |  |  |
+| `status` _[SGPURackStatus](#sgpurackstatus)_ | Status 汇总该机架的持久节点分配。 |  | Optional: \{\} <br /> |
 
 
 #### SGPURackGPU
 
 
 
-SGPURackGPU contains deterministic identity and structural placement.
+SGPURackGPU 包含确定性的标识和结构性放置。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPURackNode](#sgpuracknode)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `index` _integer_ | Index is the zero-based GPU index within the logical Node. |  | Maximum: 63 <br />Minimum: 0 <br /> |
-| `uuid` _string_ | UUID is the stable GPU identifier. |  | Pattern: `^GPU-[0-9a-f]\{8\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{12\}$` <br /> |
-| `serial` _string_ | Serial is the GPU serial number. |  | MinLength: 1 <br /> |
-| `minorNumber` _integer_ | MinorNumber is the device minor number exposed to workloads. |  | Minimum: 0 <br /> |
-| `pciAddress` _string_ | PCIAddress is the GPU's PCI bus address. |  | Pattern: `^[0-9a-f]\{4\}:[0-9a-f]\{2\}:[0-9a-f]\{2\}\.[0-7]$` <br /> |
-| `rootComplex` _string_ | RootComplex identifies the PCI root complex connected to the GPU. |  | Pattern: `^pci[0-9a-f]\{4\}:[0-9a-f]\{2\}$` <br /> |
-| `numaNode` _integer_ | NUMANode is the host NUMA node associated with the GPU. |  | Minimum: 0 <br /> |
-| `hostProcessorIndex` _integer_ | HostProcessorIndex is the host CPU index associated with the GPU. |  | Minimum: 0 <br /> |
+| `index` _integer_ | Index 是逻辑节点内从零开始的 GPU 索引。 |  | Maximum: 63 <br />Minimum: 0 <br /> |
+| `uuid` _string_ | UUID 是稳定的 GPU 标识符。 |  | Pattern: `^GPU-[0-9a-f]\{8\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{12\}$` <br /> |
+| `serial` _string_ | Serial 是 GPU 序列号。 |  | MinLength: 1 <br /> |
+| `minorNumber` _integer_ | MinorNumber 是向工作负载暴露的设备次设备号。 |  | Minimum: 0 <br /> |
+| `pciAddress` _string_ | PCIAddress 是 GPU 的 PCI 总线地址。 |  | Pattern: `^[0-9a-f]\{4\}:[0-9a-f]\{2\}:[0-9a-f]\{2\}\.[0-7]$` <br /> |
+| `rootComplex` _string_ | RootComplex 标识连接到该 GPU 的 PCI root complex。 |  | Pattern: `^pci[0-9a-f]\{4\}:[0-9a-f]\{2\}$` <br /> |
+| `numaNode` _integer_ | NUMANode 是与该 GPU 关联的宿主 NUMA 节点。 |  | Minimum: 0 <br /> |
+| `hostProcessorIndex` _integer_ | HostProcessorIndex 是与该 GPU 关联的宿主 CPU 索引。 |  | Minimum: 0 <br /> |
 
 
 #### SGPURackIdentity
 
 
 
-SGPURackIdentity contains deterministic rack coordinates and fabric identity.
+SGPURackIdentity 包含确定性的机架坐标和 fabric 身份。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPURackSpec](#sgpurackspec)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `rackGroup` _string_ | RackGroup is the rack-group identifier within the source inventory. |  | Format: dns1123Label <br />MaxLength: 63 <br />MinLength: 1 <br /> |
-| `rackIndex` _integer_ | RackIndex is the zero-based rack index within its group. |  | Minimum: 0 <br /> |
-| `fabricUUID` _string_ | FabricUUID identifies the fabric domain associated with the rack. |  | Format: uuid <br /> |
-| `cliqueID` _integer_ | CliqueID is reserved for future multi-clique layouts and remains zero. |  | Maximum: 0 <br />Minimum: 0 <br /> |
+| `rackGroup` _string_ | RackGroup 是源清单中的机架组标识符。 |  | Format: dns1123Label <br />MaxLength: 63 <br />MinLength: 1 <br /> |
+| `rackIndex` _integer_ | RackIndex 是其组内从零开始的机架索引。 |  | Minimum: 0 <br /> |
+| `fabricUUID` _string_ | FabricUUID 标识与该机架关联的 fabric 域。 |  | Format: uuid <br /> |
+| `cliqueID` _integer_ | CliqueID 保留给未来的多 clique 布局，当前保持为零。 |  | Maximum: 0 <br />Minimum: 0 <br /> |
 
 
 #### SGPURackInventoryReference
 
 
 
-SGPURackInventoryReference pins a rack to an exact inventory instance.
+SGPURackInventoryReference 把机架固定到确切的清单实例。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPURackSpec](#sgpurackspec)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `name` _string_ | Name is the inventory name. |  | MinLength: 1 <br /> |
-| `uid` _[UID](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#uid-types-pkg)_ | UID pins the reference to the exact inventory instance. |  |  |
+| `name` _string_ | Name 是清单名称。 |  | MinLength: 1 <br /> |
+| `uid` _[UID](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#uid-types-pkg)_ | UID 把该引用固定到确切的清单实例。 |  |  |
 
 
 #### SGPURackNode
 
 
 
-SGPURackNode is one logical Node and its optional Kubernetes Node binding.
+SGPURackNode 是一个逻辑节点及其可选的 Kubernetes 节点绑定。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPURackSpec](#sgpurackspec)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `index` _integer_ | Index is the zero-based logical Node index within the rack. |  | Maximum: 1023 <br />Minimum: 0 <br /> |
-| `nodeRef` _[SGPUNodeReference](#sgpunodereference)_ | NodeRef is absent while the logical Node is unbound. Its UID distinguishes<br />a replacement Kubernetes Node that reuses the same name. |  | Optional: \{\} <br /> |
-| `gpus` _[SGPURackGPU](#sgpurackgpu) array_ | GPUs are rendered once for the logical Node and do not depend on its binding. |  | MaxItems: 64 <br />MinItems: 1 <br /> |
+| `index` _integer_ | Index 是机架内从零开始的逻辑节点索引。 |  | Maximum: 1023 <br />Minimum: 0 <br /> |
+| `nodeRef` _[SGPUNodeReference](#sgpunodereference)_ | 逻辑节点未绑定时 NodeRef 不存在。其 UID 用于区分<br />复用同一名称的替代 Kubernetes 节点。 |  | Optional: \{\} <br /> |
+| `gpus` _[SGPURackGPU](#sgpurackgpu) array_ | GPU 为逻辑节点渲染一次，不依赖其绑定。 |  | MaxItems: 64 <br />MinItems: 1 <br /> |
 
 
 #### SGPURackProfile
 
 
 
-SGPURackProfile is the static shape of a simulated GPU rack.
+SGPURackProfile 是模拟 GPU 机架的静态形态。
 
 
 
 
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
 | `apiVersion` _string_ | `mokka.nvidia.com/v1alpha1` | | |
 | `kind` _string_ | `SGPURackProfile` | | |
-| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
-| `spec` _[SGPURackProfileSpec](#sgpurackprofilespec)_ | Spec defines the hardware shape and default software/runtime metadata. |  |  |
+| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#objectmeta-v1-meta)_ | 有关 `metadata` 的字段，请参阅 Kubernetes API 文档。 |  |  |
+| `spec` _[SGPURackProfileSpec](#sgpurackprofilespec)_ | Spec 定义硬件形态以及默认的软件/运行时元数据。 |  |  |
 
 
 #### SGPURackProfileDefaults
 
 
 
-SGPURackProfileDefaults is initial runtime state for fresh sGPUs.
+SGPURackProfileDefaults 是新 sGPU 的初始运行时状态。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPURackProfileSpec](#sgpurackprofilespec)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `runtime` _[RuntimeState](#runtimestate)_ | Runtime provides initial sparse runtime settings for newly materialized GPUs. |  | Optional: \{\} <br /> |
+| `runtime` _[RuntimeState](#runtimestate)_ | Runtime 为新物化的 GPU 提供初始的稀疏运行时设置。 |  | Optional: \{\} <br /> |
 
 
 #### SGPURackProfileReference
 
 
 
-SGPURackProfileReference pins rendered data to an exact profile revision.
+SGPURackProfileReference 把渲染数据固定到确切的 profile 修订。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPURackSpec](#sgpurackspec)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `name` _string_ | Name is the profile name. |  | MinLength: 1 <br /> |
-| `uid` _[UID](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#uid-types-pkg)_ | UID pins the reference to the exact profile instance. |  |  |
-| `generation` _integer_ | Generation records the profile generation used for rendering. |  | Minimum: 1 <br /> |
-| `revision` _string_ | Revision identifies the rendered profile content, independent of its name. |  | Pattern: `^[0-9a-f]\{64\}$` <br /> |
+| `name` _string_ | Name 是 profile 名称。 |  | MinLength: 1 <br /> |
+| `uid` _[UID](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#uid-types-pkg)_ | UID 把该引用固定到确切的 profile 实例。 |  |  |
+| `generation` _integer_ | Generation 记录用于渲染的 profile generation。 |  | Minimum: 1 <br /> |
+| `revision` _string_ | Revision 标识渲染出的 profile 内容，与其名称无关。 |  | Pattern: `^[0-9a-f]\{64\}$` <br /> |
 
 
 #### SGPURackProfileSpec
 
 
 
-SGPURackProfileSpec is one logical rack profile.
+SGPURackProfileSpec 是一个逻辑机架 profile。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPURackProfile](#sgpurackprofile)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `rack` _[SGPURackShape](#sgpurackshape)_ | Rack is the logical rack shape described by this profile. |  |  |
-| `node` _[SGPUNode](#sgpunode)_ | Node describes the shared simulated hardware for each rack Node. |  |  |
-| `software` _[SGPUSoftware](#sgpusoftware)_ | Software records optional driver, NVML, and CUDA versions. |  | Optional: \{\} <br /> |
-| `defaults` _[SGPURackProfileDefaults](#sgpurackprofiledefaults)_ | Defaults provides initial runtime settings for newly materialized GPUs. |  | Optional: \{\} <br /> |
+| `rack` _[SGPURackShape](#sgpurackshape)_ | Rack 是该 profile 描述的逻辑机架形态。 |  |  |
+| `node` _[SGPUNode](#sgpunode)_ | Node 描述每个机架节点共享的模拟硬件。 |  |  |
+| `software` _[SGPUSoftware](#sgpusoftware)_ | Software 记录可选的驱动、NVML 和 CUDA 版本。 |  | Optional: \{\} <br /> |
+| `defaults` _[SGPURackProfileDefaults](#sgpurackprofiledefaults)_ | Defaults 为新物化的 GPU 提供初始运行时设置。 |  | Optional: \{\} <br /> |
 
 
 #### SGPURackShape
 
 
 
-SGPURackShape defines the dimensions of a logical rack template. It is
-nested profile data rather than a materialized SGPURack resource.
+SGPURackShape 定义逻辑机架模板的尺寸。它是嵌套的 profile 数据，而非已物化的 SGPURack 资源。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPURackProfileSpec](#sgpurackprofilespec)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `nodesPerRack` _integer_ | NodesPerRack is the number of logical Nodes in each rack. |  | Maximum: 1024 <br />Minimum: 1 <br /> |
+| `nodesPerRack` _integer_ | NodesPerRack 是每个机架中的逻辑节点数量。 |  | Maximum: 1024 <br />Minimum: 1 <br /> |
 
 
 #### SGPURackSpec
 
 
 
-SGPURackSpec is a rendered rack with durable logical Node bindings.
+SGPURackSpec 是具有持久逻辑节点绑定的渲染机架。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPURack](#sgpurack)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `inventoryRef` _[SGPURackInventoryReference](#sgpurackinventoryreference)_ | InventoryRef pins ownership to an exact inventory instance so a<br />same-name replacement cannot inherit this rack. |  |  |
-| `profileRef` _[SGPURackProfileReference](#sgpurackprofilereference)_ | ProfileRef records the exact profile revision used to render the rack. |  |  |
-| `identity` _[SGPURackIdentity](#sgpurackidentity)_ | Identity is the stable coordinate used by agents and topology consumers. |  |  |
-| `nodes` _[SGPURackNode](#sgpuracknode) array_ | Nodes retain stable device identities while Kubernetes Node assignments<br />change. Fabric and network capabilities remain in the referenced profile. |  | MaxItems: 1024 <br />MinItems: 1 <br /> |
+| `inventoryRef` _[SGPURackInventoryReference](#sgpurackinventoryreference)_ | InventoryRef 把所有权固定到确切的清单实例，使同名替代者无法继承该机架。 |  |  |
+| `profileRef` _[SGPURackProfileReference](#sgpurackprofilereference)_ | ProfileRef 记录用于渲染该机架的确切 profile 修订。 |  |  |
+| `identity` _[SGPURackIdentity](#sgpurackidentity)_ | Identity 是 agent 和拓扑消费者使用的稳定坐标。 |  |  |
+| `nodes` _[SGPURackNode](#sgpuracknode) array_ | 当 Kubernetes 节点分配发生变化时，Nodes 保留稳定的设备身份。<br />Fabric 和网络能力保留在所引用的 profile 中。 |  | MaxItems: 1024 <br />MinItems: 1 <br /> |
 
 
 #### SGPURackStatus
 
 
 
-SGPURackStatus summarizes durable logical Node assignments.
+SGPURackStatus 汇总持久的逻辑节点分配。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPURack](#sgpurack)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `observedGeneration` _integer_ | ObservedGeneration is the latest spec generation reflected by this status. |  | Minimum: 0 <br />Optional: \{\} <br /> |
-| `assignedNodes` _integer_ | AssignedNodes is the number of logical Nodes with an exact Kubernetes<br />Node binding. |  | Minimum: 0 <br />Optional: \{\} <br /> |
-| `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#condition-v1-meta) array_ | Conditions report whether the rendered assignment is ready for agents. |  | Optional: \{\} <br /> |
+| `observedGeneration` _integer_ | ObservedGeneration 是此状态所反映的最新 spec generation。 |  | Minimum: 0 <br />Optional: \{\} <br /> |
+| `assignedNodes` _integer_ | AssignedNodes 是具有确切 Kubernetes 节点绑定的逻辑节点数量。 |  | Minimum: 0 <br />Optional: \{\} <br /> |
+| `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#condition-v1-meta) array_ | Conditions 报告渲染出的分配是否已为 agent 就绪。 |  | Optional: \{\} <br /> |
 
 
 #### SGPURuntimePolicy
 
 
 
-SGPURuntimePolicy applies a sparse RuntimeState override to a subset of
-an SGPUInventory.
+SGPURuntimePolicy 对一个 SGPUInventory 的子集应用稀疏的 RuntimeState 覆盖。
 
 
 
 
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
 | `apiVersion` _string_ | `mokka.nvidia.com/v1alpha1` | | |
 | `kind` _string_ | `SGPURuntimePolicy` | | |
-| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
-| `spec` _[SGPURuntimePolicySpec](#sgpuruntimepolicyspec)_ | Spec defines the target selection and runtime settings to apply. |  |  |
-| `status` _[SGPURuntimePolicyStatus](#sgpuruntimepolicystatus)_ | Status summarizes the target scope selected for this policy. |  | Optional: \{\} <br /> |
+| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#objectmeta-v1-meta)_ | 有关 `metadata` 的字段，请参阅 Kubernetes API 文档。 |  |  |
+| `spec` _[SGPURuntimePolicySpec](#sgpuruntimepolicyspec)_ | Spec 定义目标选择和要应用的运行时设置。 |  |  |
+| `status` _[SGPURuntimePolicyStatus](#sgpuruntimepolicystatus)_ | Status 汇总为该策略选择的目标作用域。 |  | Optional: \{\} <br /> |
 
 
 #### SGPURuntimePolicySpec
 
 
 
-SGPURuntimePolicySpec pairs a target selector with the RuntimeState to apply.
+SGPURuntimePolicySpec 把目标选择器与要应用的 RuntimeState 配对。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPURuntimePolicy](#sgpuruntimepolicy)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `targetRef` _[PolicyTargetRef](#policytargetref)_ | TargetRef selects the inventory and optional rack, Node, and GPU subset. |  |  |
-| `runtime` _[RuntimeState](#runtimestate)_ | Runtime contains sparse settings to apply to the selected GPUs. |  | Optional: \{\} <br /> |
+| `targetRef` _[PolicyTargetRef](#policytargetref)_ | TargetRef 选择清单以及可选的机架、节点和 GPU 子集。 |  |  |
+| `runtime` _[RuntimeState](#runtimestate)_ | Runtime 包含要应用于所选 GPU 的稀疏设置。 |  | Optional: \{\} <br /> |
 
 
 #### SGPURuntimePolicyStatus
 
 
 
-SGPURuntimePolicyStatus reports whether the policy is accepted and holds
-comma-joined denormalizations of spec.targetRef axes for print columns.
+SGPURuntimePolicyStatus 报告策略是否被接受，并保存 spec.targetRef 各维度的逗号连接反规范化值，用于打印列。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPURuntimePolicy](#sgpuruntimepolicy)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `rackGroupsSummary` _string_ | RackGroupsSummary is the comma-separated selected rack-group IDs. |  | Optional: \{\} <br /> |
-| `rackIndexesSummary` _string_ | RackIndexesSummary is the comma-separated selected rack indexes. |  | Optional: \{\} <br /> |
-| `nodeIndexesSummary` _string_ | NodeIndexesSummary is the comma-separated selected logical Node indexes. |  | Optional: \{\} <br /> |
-| `gpuIndexesSummary` _string_ | GPUIndexesSummary is the comma-separated selected GPU indexes. |  | Optional: \{\} <br /> |
-| `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#condition-v1-meta) array_ | Conditions report whether the policy is accepted. |  | Optional: \{\} <br /> |
+| `rackGroupsSummary` _string_ | RackGroupsSummary 是以逗号分隔的所选机架组 ID。 |  | Optional: \{\} <br /> |
+| `rackIndexesSummary` _string_ | RackIndexesSummary 是以逗号分隔的所选机架索引。 |  | Optional: \{\} <br /> |
+| `nodeIndexesSummary` _string_ | NodeIndexesSummary 是以逗号分隔的所选逻辑节点索引。 |  | Optional: \{\} <br /> |
+| `gpuIndexesSummary` _string_ | GPUIndexesSummary 是以逗号分隔的所选 GPU 索引。 |  | Optional: \{\} <br /> |
+| `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#condition-v1-meta) array_ | Conditions 报告策略是否被接受。 |  | Optional: \{\} <br /> |
 
 
 #### SGPUSoftware
 
 
 
-SGPUSoftware is driver/NVML/CUDA versions.
+SGPUSoftware 是驱动/NVML/CUDA 版本。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPURackProfileSpec](#sgpurackprofilespec)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `driverVersion` _string_ | DriverVersion is the NVIDIA driver version. |  | Optional: \{\} <br /> |
-| `nvmlVersion` _string_ | NVMLVersion is the NVIDIA Management Library version. |  | Optional: \{\} <br /> |
-| `cudaVersion` _string_ | CUDAVersion is the CUDA version. |  | Optional: \{\} <br /> |
+| `driverVersion` _string_ | DriverVersion 是 NVIDIA 驱动版本。 |  | Optional: \{\} <br /> |
+| `nvmlVersion` _string_ | NVMLVersion 是 NVIDIA 管理库版本。 |  | Optional: \{\} <br /> |
+| `cudaVersion` _string_ | CUDAVersion 是 CUDA 版本。 |  | Optional: \{\} <br /> |
 
 
 #### SGPUTopology
 
 
 
-SGPUTopology is PCIe slots, GPU fabric, and network visible to the node.
+SGPUTopology 是节点可见的 PCIe 插槽、GPU fabric 和网络。
 
 
 
-_Appears in:_
+_出现于：_
 - [SGPUNode](#sgpunode)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `gpuSlots` _[GPUSlot](#gpuslot) array_ | GPUSlots maps each GPU index to its PCI and host topology coordinates. |  | MaxItems: 64 <br />MinItems: 1 <br /> |
-| `gpuFabric` _[GPUFabric](#gpufabric)_ | GPUFabric describes optional NVLink/NVSwitch connectivity. |  | Optional: \{\} <br /> |
-| `network` _[NetworkTopology](#networktopology)_ | Network describes optional out-of-band network adapters. |  | Optional: \{\} <br /> |
+| `gpuSlots` _[GPUSlot](#gpuslot) array_ | GPUSlots 把每个 GPU 索引映射到其 PCI 和宿主拓扑坐标。 |  | MaxItems: 64 <br />MinItems: 1 <br /> |
+| `gpuFabric` _[GPUFabric](#gpufabric)_ | GPUFabric 描述可选的 NVLink/NVSwitch 连接。 |  | Optional: \{\} <br /> |
+| `network` _[NetworkTopology](#networktopology)_ | Network 描述可选的带外网络适配器。 |  | Optional: \{\} <br /> |
 
 
 #### SupportedClocks
 
 
 
-SupportedClocks pairs a memory clock with supported graphics clocks.
+SupportedClocks 把显存时钟与支持的 graphics 时钟配对。
 
 
 
-_Appears in:_
+_出现于：_
 - [GPUClocks](#gpuclocks)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `memoryMHz` _integer_ | MemoryMHz is a memory clock rate paired with GraphicsMHz values. |  |  |
-| `graphicsMHz` _integer array_ | GraphicsMHz lists graphics clock rates supported at MemoryMHz. |  |  |
+| `memoryMHz` _integer_ | MemoryMHz 是与 GraphicsMHz 值配对的显存时钟频率。 |  |  |
+| `graphicsMHz` _integer array_ | GraphicsMHz 列出在 MemoryMHz 下支持的 graphics 时钟频率。 |  |  |
 
 
 #### TemperatureTelemetry
 
 
 
-TemperatureTelemetry drives synthetic GPU/memory temperature.
+TemperatureTelemetry 驱动合成的 GPU/显存温度。
 
 
 
-_Appears in:_
+_出现于：_
 - [RuntimeTelemetry](#runtimetelemetry)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `mode` _string_ | Mode selects constant or generated temperature values. |  | Enum: [Fixed Pattern] <br />Optional: \{\} <br /> |
-| `gpuCelsius` _integer_ | GPUCelsius is the simulated GPU temperature in degrees Celsius. |  | Optional: \{\} <br /> |
-| `memoryCelsius` _integer_ | MemoryCelsius is the simulated memory temperature in degrees Celsius. |  | Optional: \{\} <br /> |
+| `mode` _string_ | Mode 选择恒定或生成的温度值。 |  | Enum: [Fixed Pattern] <br />Optional: \{\} <br /> |
+| `gpuCelsius` _integer_ | GPUCelsius 是模拟的 GPU 温度，单位摄氏度。 |  | Optional: \{\} <br /> |
+| `memoryCelsius` _integer_ | MemoryCelsius 是模拟的显存温度，单位摄氏度。 |  | Optional: \{\} <br /> |
 
 
 #### UtilizationPattern
 
 
 
-UtilizationPattern shapes the generated utilization curve.
+UtilizationPattern 塑造生成的利用率曲线。
 
 
 
-_Appears in:_
+_出现于：_
 - [UtilizationTelemetry](#utilizationtelemetry)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `type` _string_ | Type selects the shape of the generated utilization curve. |  | Enum: [Steady Bursty Wave] <br />Optional: \{\} <br /> |
-| `gpuPercent` _[PercentRange](#percentrange)_ | GPUPercent sets the minimum and maximum GPU utilization percentages. |  | Optional: \{\} <br /> |
-| `memoryPercent` _[PercentRange](#percentrange)_ | MemoryPercent sets the minimum and maximum memory utilization percentages. |  | Optional: \{\} <br /> |
+| `type` _string_ | Type 选择生成的利用率曲线的形状。 |  | Enum: [Steady Bursty Wave] <br />Optional: \{\} <br /> |
+| `gpuPercent` _[PercentRange](#percentrange)_ | GPUPercent 设置 GPU 利用率的最小和最大百分比。 |  | Optional: \{\} <br /> |
+| `memoryPercent` _[PercentRange](#percentrange)_ | MemoryPercent 设置显存利用率的最小和最大百分比。 |  | Optional: \{\} <br /> |
 
 
 #### UtilizationTelemetry
 
 
 
-UtilizationTelemetry drives synthetic GPU/memory utilization.
+UtilizationTelemetry 驱动合成的 GPU/显存利用率。
 
 
 
-_Appears in:_
+_出现于：_
 - [RuntimeTelemetry](#runtimetelemetry)
 
-| Field | Description | Default | Validation |
+| 字段 | 描述 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `mode` _string_ | Mode selects pattern-generated or fixed utilization values. |  | Enum: [Pattern Fixed] <br />Optional: \{\} <br /> |
-| `pattern` _[UtilizationPattern](#utilizationpattern)_ | Pattern defines the utilization values generated over time. |  | Optional: \{\} <br /> |
+| `mode` _string_ | Mode 选择按模式生成或固定的利用率值。 |  | Enum: [Pattern Fixed] <br />Optional: \{\} <br /> |
+| `pattern` _[UtilizationPattern](#utilizationpattern)_ | Pattern 定义随时间生成的利用率值。 |  | Optional: \{\} <br /> |

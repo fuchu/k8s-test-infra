@@ -1,6 +1,6 @@
 # vGPU 宿主机与客户机
 
-NVIDIA vGPU 会把一块物理 GPU 拆成多个虚拟 GPU，再由 hypervisor 分配给虚拟机。Mokka 能在一台 CPU 节点上模拟拆分的**任意一侧**：作为**宿主机**时，它的 GPU 上运行着 vGPU manager 和一组 vGPU 实例；作为**客户机**时，它的 GPU 就是虚拟机看到的、已授权的 vGPU。`nvidia-smi` 读取两侧的方式和在真实硬件上一样，全程不需要 hypervisor 或虚拟机。
+NVIDIA vGPU 会把一块物理 GPU 拆成多个虚拟 GPU，再由 hypervisor 分配给虚拟机。Mokka 能在一台 CPU 节点上模拟拆分的**任意一侧**：作为**宿主机**时，它的 GPU 上运行着 vGPU manager 和一组 vGPU 实例；作为**客户机**时，它的 GPU 就是虚拟机看到的、已授权的 vGPU。`nvidia-smi` 读取两侧的方式和在真实硬件上一样。全程不需要 hypervisor 或虚拟机。
 
 一个节点一次只能扮演其中一侧，由 `gpu.vgpu.mode` 决定。下面两个 values 文件对 A100 节点来说是完整可用的；其中每个字段的含义，以及每个配置块必须遵守的规则，都写在 [vGPU 参考](../../vgpu.md) 里。
 
@@ -36,10 +36,10 @@ POD=$(kubectl -n mokka get pod -l app.kubernetes.io/name=nvml-mock \
 kubectl -n mokka exec "$POD" -- nvidia-smi vgpu
 ```
 
-每块 GPU 都会列出自己的两个实例（下面输出只截取 8 块 GPU 中的前两块）：
-
 !!! note "国内镜像拉取"
     若 `ghcr.io` 等镜像源拉取缓慢或超时，可给 `nvml-mock` 加 `--set global.imageRegistry=harbor.heilansc.com/ghcr.io`。具体做法与示例见[国内镜像加速](../README.md#domestic-mirror)。
+
+每块 GPU 都会列出自己的两个实例（下面输出只截取 8 块 GPU 中的前两块）：
 
 ```text
 +-----------------------------------------------------------------------------+
@@ -125,7 +125,7 @@ GPU 会把自己报告成 vGPU，并展示授权信息（下面只截取虚拟�
         License Status                    : Licensed (Expiry: Permanent)
 ```
 
-宿主机驱动版本和分支不会出现在 `nvidia-smi` 里，它们是通过[参考文档](../../vgpu.md#guest)描述的 PCI capability 传给 GPU Feature Discovery 的。
+宿主机驱动版本和分支不会出现在 `nvidia-smi` 里；它们通过[参考文档](../../vgpu.md#guest)描述的 PCI capability 传给 GPU Feature Discovery。
 
 ## 排查问题
 
@@ -133,7 +133,7 @@ GPU 会把自己报告成 vGPU，并展示授权信息（下面只截取虚拟�
 宿主机至少要有一种类型，缺少时 chart 会拒绝渲染，也就不会部署任何东西。像[上面的 `host-values.yaml`](#simulate-a-vgpu-host) 那样补上 `gpu.vgpu.types`。
 
 **`helm install --wait` 超时，`nvml-mock` Pod 一直停在 `Init:0/1` 并反复重启。**
-说明节点代理（node agent）拒绝了 `gpu.vgpu` 配置块，始终无法就绪，启动探针因此失败；而 `--wait` 只会把它报成超时。节点代理的日志里会点名具体字段：
+说明节点 agent 拒绝了 `gpu.vgpu` 配置块，始终无法就绪，启动探针因此失败；而 `--wait` 只会把它报成超时。节点 agent 的日志里会点名具体字段：
 
 ```bash
 kubectl -n mokka logs "$POD" -c node-agent | grep 'state source error'
@@ -156,5 +156,5 @@ kubectl -n mokka logs "$POD" -c node-agent | grep 'state source error'
 | 想了解 | 参见 |
 |---|---|
 | 全部 `gpu.vgpu` chart 配置项 | [vGPU：chart 之下](../../vgpu.md#under-the-chart) |
-| 配置档的每个字段、身份规则以及未模拟的部分 | [vGPU](../../vgpu.md) |
-| 配置档里 `virtualization` 块的其余内容 | [配置](../../configuration.md#virtualization) |
+| profile 的每个字段、身份规则以及未模拟的部分 | [vGPU](../../vgpu.md) |
+| profile 里 `virtualization` 块的其余内容 | [配置](../../configuration.md#virtualization) |

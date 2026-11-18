@@ -1,80 +1,50 @@
-# Capturing a real node
+# 采集真实节点
 
-A profile is only as good as what it was checked against. This guide takes you
-from a Kubernetes cluster with real GPU nodes to a scrubbed capture you can
-commit, and then to a check of how closely a Mokka profile reproduces it. Use it
-when adding a GPU type, when a new driver branch ships, and to find out how much
-of a platform Mokka can already simulate.
+profile 的质量取决于它对照校验的对象。本指南带你走完整个流程：从拥有真实 GPU 节点的 Kubernetes 集群出发，得到一份可提交的脱敏采集数据，再检查 Mokka profile 能在多大程度上复现真实节点。添加 GPU 型号、发布新驱动分支，或想知道 Mokka 已能模拟某平台的多少内容时，都可以使用这份指南。
 
-Every step uses one tool, [`mokka-capture`](../tools/mokka-capture.md), run on
-your machine. The procedure produces three things:
+每一步都用同一个工具 [`mokka-capture`](../tools/mokka-capture.md)，在你自己的机器上运行。流程产出三样东西：
 
-- a directory of raw outputs per node and for the cluster (`mokka-capture collect`);
-- an NVML recording of every getter the driver answers, taken in the driver
-  container as part of the same run (`mokka-capture dump`);
-- a scrubbed copy of both (`mokka-capture scrub`) that is safe to commit under
-  `tests/hardware-captures/`.
+- 每个节点及集群的原始输出目录（`mokka-capture collect`）；
+- 同一次运行中，驱动容器里每个 getter 应答的 NVML 录制（`mokka-capture dump`）；
+- 两者的脱敏副本（`mokka-capture scrub`），可安全提交到 `tests/hardware-captures/` 下。
 
-## What the capture covers
+## 采集覆盖什么
 
-Mokka imitates several layers that real consumers read. Each row is a surface the
-capture records and where Mokka produces it today.
+Mokka 模拟真实消费者读取的若干层。每行列出一个采集的接口面，以及 Mokka 目前在哪里生成它。
 
-| Surface | Captured as | Mock side |
-| --- | --- | --- |
-| NVML library | `nvml-dump.json`, `nvml-symbols.txt` | `pkg/gpu/mocknvml/bridge`, `engine`, profile YAML |
-| `nvidia-smi` | `smi-*.txt`, `smi-q.xml` | the same engine, through the bundled binary |
-| Driver `/proc` files | `proc-*.txt` | `internal/agent/gpudriver`, `internal/agent/migcaps` |
-| Device files and majors | `host-dev-nvidia.txt`, `host-proc-devices.txt` | node agent, CDI and NRI specs |
-| PCI sysfs and DMI | `host-lspci-*.txt`, `host-pci-*.txt`, `pci-*.txt`, `host-dmi.txt` | profile `pcie_topology`, `libmockfs` |
-| NUMA and CPU | `host-numa*.txt`, `host-lscpu.txt`, `host-pagesize.txt` | `pcie_topology.numa_node` |
-| NVLink and fabric | `smi-nvlink-*.txt`, `smi-q-d-FABRIC.txt`, `proc-capabilities.txt` | profile `nvlink`, IMEX staging |
-| RDMA devices and ports | `rdma-*.txt`, `host-ib*.txt`, `host-rdma-link.txt` | profile `infiniband`, `libibmock` |
-| Network interfaces | `net-*.txt` | node agent |
-| Kernel modules and log | `sys-module-*.txt`, `kernel-log-nic-gpu.txt` | `libmockfs` |
-| MIG | `smi-mig-*.txt`, `proc-mig-minors.txt` | `MOCK_MIG_PROFILES_CONFIG` |
-| CDI specs | `cdi-*.txt` | node agent |
-| Kubernetes view | `cluster/*` | Helm chart, e2e assertions |
+| 接口面 | 采集形式 | Mock 侧 |
+|---|---|---|
+| NVML 库 | `nvml-dump.json`、`nvml-symbols.txt` | `pkg/gpu/mocknvml/bridge`、`engine`、profile YAML |
+| `nvidia-smi` | `smi-*.txt`、`smi-q.xml` | 同一引擎，通过随附的二进制 |
+| 驱动 `/proc` 文件 | `proc-*.txt` | `internal/agent/gpudriver`、`internal/agent/migcaps` |
+| 设备文件与主设备号 | `host-dev-nvidia.txt`、`host-proc-devices.txt` | 节点 agent、CDI 与 NRI 规格 |
+| PCI sysfs 与 DMI | `host-lspci-*.txt`、`host-pci-*.txt`、`pci-*.txt`、`host-dmi.txt` | profile `pcie_topology`、`libmockfs` |
+| NUMA 与 CPU | `host-numa*.txt`、`host-lscpu.txt`、`host-pagesize.txt` | `pcie_topology.numa_node` |
+| NVLink 与 fabric | `smi-nvlink-*.txt`、`smi-q-d-FABRIC.txt`、`proc-capabilities.txt` | profile `nvlink`、IMEX 部署 |
+| RDMA 设备与端口 | `rdma-*.txt`、`host-ib*.txt`、`host-rdma-link.txt` | profile `infiniband`、`libibmock` |
+| 网络接口 | `net-*.txt` | 节点 agent |
+| 内核模块与日志 | `sys-module-*.txt`、`kernel-log-nic-gpu.txt` | `libmockfs` |
+| MIG | `smi-mig-*.txt`、`proc-mig-minors.txt` | `MOCK_MIG_PROFILES_CONFIG` |
+| CDI 规格 | `cdi-*.txt` | 节点 agent |
+| Kubernetes 视图 | `cluster/*` | Helm chart、e2e 断言 |
 
-Some surfaces cannot be read from a node: the switch-side topology of the
-fabric (which NIC is on which rail or leaf), and the attributes a DRA driver
-publishes when none is installed. Capture those from the fabric's owner, or
-after the driver is installed.
+有些接口面无法从节点读取：fabric 的交换机侧拓扑（哪块 NIC 在哪条 rail 或 leaf 上），以及未安装 DRA driver 时它本应发布的属性。这些数据要从 fabric 的所有者处采集，或在 driver 安装后采集。
 
-## Before you start
+## 开始之前
 
-You need:
+你需要：
 
-- a kubeconfig for a cluster whose GPU nodes you may inspect, with permission to
-  run `exec` in the GPU Operator namespace and to create a privileged pod. The
-  host pod mounts the node's root filesystem and runs as root. Its image
-  (`-host-pod-image`) is pinned by digest and the pod is deleted on every
-  way out, but the pin does not cover the tools it installs: the pod runs
-  `apt-get install` for `pciutils`, `rdma-core` and others from the image's
-  distribution mirrors. On a cluster where that is not acceptable, set
-  `-host-pod-image` to an image that already has those tools;
-- the nodes running the GPU Operator's driver container. The driver and
-  `nvidia-smi` live in that container, not on the host. If the driver is
-  installed on the host instead, run the `nvidia-smi` and `/proc` commands in
-  [`internal/capture/collect`](https://github.com/NVIDIA/k8s-test-infra/blob/main/internal/capture/collect/surfaces.go)
-  there directly;
-- `kubectl`, Go to build `mokka-capture`, and Docker to build its Linux copy for
-  the driver container.
+- 一个可检查其 GPU 节点的集群 kubeconfig，具有在 GPU Operator 命名空间中执行 `exec` 和创建特权 Pod 的权限。host Pod 会挂载节点根文件系统并以 root 运行。它的镜像（`-host-pod-image`）按摘要固定，每次退出都会删除该 Pod，但按摘要固定并不限制它安装工具：Pod 会从镜像发行版的软件源用 `apt-get install` 安装 `pciutils`、`rdma-core` 等。在不允许这样做的集群上，把 `-host-pod-image` 设为已包含这些工具的镜像；
+- 运行 GPU Operator driver 容器的节点。驱动和 `nvidia-smi` 位于该容器中，而非宿主机上。如果驱动实际装在宿主机上，请在宿主机上直接运行 [`internal/capture/collect`](https://github.com/NVIDIA/k8s-test-infra/blob/main/internal/capture/collect/surfaces.go) 中的 `nvidia-smi` 和 `/proc` 命令；
+- `kubectl`、用于构建 `mokka-capture` 的 Go，以及用于为 driver 容器构建其 Linux 副本的 Docker。
 
-Capture at least two nodes of the same kind. Two nodes show which fields vary per
-unit and which describe the model. The values that differ between them (tray
-index, slot number, minors) belong in the profile as per-node fields.
+至少采集同一型号的两个节点。两个节点能显示哪些字段逐台变化、哪些描述型号。它们之间不同的值（托盘索引、槽位号、次设备号）应作为逐节点字段写进 profile。
 
-Take the capture with the node idle. Readings that move with load, such as
-utilisation, temperature and power draw, are excluded from comparisons.
+采集时让节点处于空闲。随负载变化的读数，如利用率、温度和功耗，不参与比对。
 
-## Step 1: build `mokka-capture`
+## 第 1 步——构建 `mokka-capture`
 
-Build the tool for your machine, then a Linux copy for the driver container. The
-NVML dump loads the driver's own `libnvidia-ml.so.1`, so it must run inside the
-driver container, built for the node's architecture. go-nvml loads the library
-at run time, so the binary is dynamically linked: build it on a host of the
-node's architecture.
+先为本机构建工具，再为 driver 容器构建一个 Linux 副本。NVML dump 会加载驱动自身的 `libnvidia-ml.so.1`，因此它必须在 driver 容器内运行，并按节点架构构建。go-nvml 在运行时加载库，因此二进制是动态链接的：要在节点架构的主机上构建。
 
 ```bash
 export OUT=$PWD/capture
@@ -82,14 +52,11 @@ go build -o bin/mokka-capture ./cmd/mokka-capture
 bin/mokka-capture collect -out "$OUT" build-dump
 ```
 
-This writes `$OUT/bin/mokka-capture-linux-<arch>`. If Docker hangs while pulling
-the image, point it at an anonymous configuration first with
-`export DOCKER_CONFIG=$(mktemp -d)`.
+这会写入 `$OUT/bin/mokka-capture-linux-<arch>`。如果 Docker 拉取镜像时卡住，先用匿名配置指向它：`export DOCKER_CONFIG=$(mktemp -d)`。
 
-## Step 2: capture
+## 第 2 步——采集
 
-List the nodes, then run the capture for each GPU node. `all` takes the driver
-container captures, the host captures and, once, the cluster captures:
+列出节点，然后对每个 GPU 节点运行采集。`all` 会进行 driver 容器采集、宿主机采集，并进行一次集群采集：
 
 ```bash
 kubectl get nodes
@@ -97,52 +64,36 @@ bin/mokka-capture collect -out "$OUT" -dump-binary "$OUT/bin/mokka-capture-linux
   all <node-a> <node-b>
 ```
 
-Every command runs in the cluster and every output is written on your machine, so
-each output is a file under `$OUT/<node>/` with nothing to copy out of a pod.
-The commands are split so you can rerun one part:
+每条命令都在集群中运行，每个输出都写到你的机器上，因此每个输出都是 `$OUT/<node>/` 下的一个文件，无需从 Pod 中复制出来。命令有意拆分，方便单独重跑某一部分：
 
-| Command | Runs | Takes |
-| --- | --- | --- |
-| `driver <node>...` | in the driver container | `nvidia-smi`, the NVML dump, `/proc/driver/nvidia` |
-| `host <node>...` | in a temporary privileged pod | PCI, NUMA, device files, NICs, CDI specs |
-| `network <node>...` | in the same pod | only the NIC, interface and RDMA surfaces, plus the cluster's network objects |
-| `cluster` | on your machine | node labels, ResourceSlices, `ClusterPolicy`, DCGM metrics |
+| 命令 | 运行位置 | 采集内容 |
+|---|---|---|
+| `driver <node>...` | driver 容器中 | `nvidia-smi`、NVML dump、`/proc/driver/nvidia` |
+| `host <node>...` | 临时特权 Pod 中 | PCI、NUMA、设备文件、NIC、CDI 规格 |
+| `network <node>...` | 同一 Pod 中 | 仅 NIC、接口和 RDMA 接口面，加上集群网络对象 |
+| `cluster` | 你的机器上 | 节点标签、ResourceSlice、`ClusterPolicy`、DCGM 指标 |
 
-The host commands create a pod named `capture-<node>-<pid>` (one per run) in the `default` namespace
-and delete it when they finish. Its tools (`pciutils`, `numactl`, the RDMA
-utilities) come from `apt`. If the cluster has no egress to the Ubuntu mirrors,
-the sysfs captures still work and the rest fail; set `-host-pod-namespace` if the
-default namespace forbids privileged pods. The other flags are listed by
-`mokka-capture collect -h`.
+host 命令会在 `default` 命名空间创建一个名为 `capture-<node>-<pid>` 的 Pod（每次运行一个）并在结束时删除。其工具（`pciutils`、`numactl`、RDMA 工具）来自 `apt`。如果集群无法访问 Ubuntu 软件源，sysfs 采集仍可用，其余会失败；若默认命名空间禁止特权 Pod，请设置 `-host-pod-namespace`。其他 flag 由 `mokka-capture collect -h` 列出。
 
-## Step 3: check the capture
+## 第 3 步——检查采集结果
 
-`collect` ends by listing empty files. An empty file nearly always means the
-connection dropped, not that the answer was empty; rerun the command that produced
-it. A failed command also leaves a line in `errors.log` beside the output, and a
-failure is data: an unsupported `nvidia-smi` option or a getter that answers
-`NOT_SUPPORTED` is what the mock has to reproduce.
+`collect` 最后会列出空文件。空文件几乎总是意味着连接中断，而不是答案为空；重跑产生它的那条命令即可。失败的命令还会在输出旁的 `errors.log` 中留下一行。而失败本身就是数据：某个 `nvidia-smi` 选项不受支持，或某个 getter 应答 `NOT_SUPPORTED`，这些正是 mock 需要复现的东西。
 
 ```bash
 find "$OUT" -type f -size 0 ! -name errors.log
 cat "$OUT"/*/errors.log
 ```
 
-Check at least:
+至少检查：
 
-- `smi-L.txt` lists every GPU you expect;
-- `nvml-dump.json` exists for each node and holds about 1,550 calls per GPU on a
-  Vera Rubin tray (`grep -o '"ret"' nvml-dump.json | wc -l` counts them; the file
-  is one line, so `grep -c` always prints 1);
-- `cdi-specs-host.txt` holds the spec files, if the operator generates CDI specs;
-- `host-ib*.txt` and `rdma-*.txt` are present on a node with NICs.
+- `smi-L.txt` 列出了你期望的所有 GPU；
+- 每个节点都有 `nvml-dump.json`，在 Vera Rubin 托盘上每块 GPU 约 1,550 次调用（`grep -o '"ret"' nvml-dump.json | wc -l` 可计数；该文件只有一行，因此 `grep -c` 总是打印 1）；
+- 如果 operator 生成 CDI 规格，`cdi-specs-host.txt` 中包含这些规格文件；
+- 有 NIC 的节点上存在 `host-ib*.txt` 和 `rdma-*.txt`。
 
-## Step 4: scrub
+## 第 4 步——脱敏
 
-The raw capture names the machines it came from: GPU and fabric UUIDs, serial
-numbers, GUIDs, MAC addresses, host names. **Do not commit or post it.**
-`mokka-capture scrub` writes a copy with a placeholder for each, one per distinct value
-across the whole run, so a GPU keeps the same placeholder in every file:
+原始采集中带有来源机器的名字：GPU 和 fabric UUID、序列号、GUID、MAC 地址、主机名。**不要提交或发布它。** `mokka-capture scrub` 会写一份副本，把每个这样的值替换为占位符。整个运行中，每个不同的值对应一个占位符，因此某块 GPU 在每个文件中都保留同一个占位符：
 
 ```bash
 bin/mokka-capture scrub -out scrubbed \
@@ -153,22 +104,11 @@ bin/mokka-capture scrub -out scrubbed \
   "$OUT/<node-a>" "$OUT/<node-b>" "$OUT/cluster"
 ```
 
-`-replace` covers names the tool cannot recognise by shape: node, cluster and
-network names. `-seed` numbers GPUs in index order. Binary files and
-`errors.log` are skipped. The NVML recording is the exception to scrubbing by
-shape: NVML returns serials, GUIDs and the fabric cluster UUID as byte arrays and
-a PDI as an integer, which no text rule matches, so the dump redacts them by
-field name as it writes, and `scrub` does the same to a recording it is given
-(plain or `.json.gz`).
+`-replace` 覆盖工具无法按形状识别的名字：节点、集群和网络名。`-seed` 按索引顺序给 GPU 编号。二进制文件和 `errors.log` 会被跳过。NVML 录制是按形状脱敏的一个例外。NVML 以字节数组返回序列号、GUID 和 fabric 集群 UUID，以整数返回 PDI，没有文本规则能匹配它们。因此，dump 在写入时按字段名遮盖这些值，`scrub` 对交给它的录制（明文或 `.json.gz`）做同样处理。
 
-Then review the result. The scrub is a best effort, not a guarantee:
+然后检查结果。脱敏是尽力而为，不是保证：
 
-1. Check that no original value survives. The `-report` table lists every
-   original the tool found; confirm none appears in the output. It cannot list
-   a value the tool did not recognise, so also search for identifiers you know
-   from elsewhere (the chassis serial on the rack label or in DMI, the node's
-   GPU UUIDs from `nvidia-smi -L`), in the forms they take in a capture: as text,
-   in hex, as decimal numbers and as lists of byte values (`nvml-dump.json`).
+1. 确认没有原值残留。`-report` 表列出了工具找到的每个原值；确认没有一个出现在输出中。它无法列出工具未识别的值，因此还要搜索你从别处知道的标识符（机架标签、DMI 中的机箱序列号，或节点通过 `nvidia-smi -L` 得到的 GPU UUID），并留意它们在采集中的形式：文本、十六进制、十进制数字和字节值列表（`nvml-dump.json`）。
 
    ```bash
    cut -f2 /tmp/substitutions.tsv | sort -u | while read -r v; do
@@ -176,127 +116,76 @@ Then review the result. The scrub is a best effort, not a guarantee:
    done
    ```
 
-   The report holds the originals, so never commit it.
-2. Search for what a pattern cannot know: project, tenant, site and user names,
-   internal domains and registries.
+   报告中包含原值，因此绝不要提交它。
+2. 搜索模式无法知道的内容：项目、租户、站点和用户名、内部域名和镜像仓库。
 
    ```bash
    grep -rniE '<tenant>|<site>|<user>|\.corp|\.internal|token|secret|passw' scrubbed
    ```
 
-3. Read the cluster files. Leave out any that carry environment detail the
-   platform does not need, such as full node objects with annotations, operator
-   pod and ConfigMap listings, and operator logs.
-4. Do not commit proprietary binaries. The driver's `libnvidia-ml.so` is
-   NVIDIA's; keep only the symbol list.
+3. 阅读集群文件。省略任何带有平台不需要的环境细节的文件，例如带注解的完整 Node 对象、operator Pod 和 ConfigMap 列表，以及 operator 日志。
+4. 不要提交专有二进制。驱动的 `libnvidia-ml.so` 属于 NVIDIA；只保留符号列表。
 
-The scrubbed `smi-q.xml` is also the hardware fixture for
-`tests/e2e/go/assertions/nvidiasmi/testdata/hardware/`.
-`mokka-capture scrub -check <file>` verifies it holds only the placeholders the
-fixtures require; `TestHardwareCapturesAreScrubbed` enforces them in CI.
+脱敏后的 `smi-q.xml` 同时也是 `tests/e2e/go/assertions/nvidiasmi/testdata/hardware/` 的硬件 fixture。`mokka-capture scrub -check <file>` 验证它只包含 fixture 所需的占位符；`TestHardwareCapturesAreScrubbed` 在 CI 中强制这一点。
 
-Finally run `go test ./internal/capture/scrub -run TestCommittedCapturesAreScrubbed`
-once the capture is under `tests/hardware-captures/`; CI runs it on every change.
-It checks shapes and field names only, so the reading above still matters.
+最后，当采集数据放到 `tests/hardware-captures/` 下后运行一次 `go test ./internal/capture/scrub -run TestCommittedCapturesAreScrubbed`；CI 会在每次变更时运行它。它只检查形状和字段名，因此上面的阅读仍然重要。
 
-## Step 5: store it
+## 第 5 步——存储
 
-By convention a scrubbed capture goes under `tests/hardware-captures/<platform>/`:
-one directory for the node, a `cluster/` directory, and a `README.md` that
-records:
+按惯例，脱敏采集放在 `tests/hardware-captures/<platform>/` 下：节点一个目录、一个 `cluster/` 目录，以及一个记录以下内容的 `README.md`：
 
-- the platform and the nodes captured (model, architecture, operating system,
-  kernel and page size);
-- driver and CUDA versions, and how the driver was installed;
-- the capture date;
-- what the capture does not contain, and why.
+- 平台和被采集的节点（型号、架构、操作系统、内核和页大小）；
+- 驱动和 CUDA 版本，以及驱动的安装方式；
+- 采集日期；
+- 采集不包含什么，以及原因。
 
-Keep the committed set small. A repository is cloned far more often than a
-capture is read, and git keeps every version of a file for good. Commit what a
-profile or a test is built from, and leave out the rest:
+保持提交内容精简。仓库被克隆的次数远多于采集被阅读的次数，而 git 会永久保留文件的每个版本。因此只提交 profile 或测试所依赖的内容，其余省略：
 
-- **Gzip the NVML dump** (`gzip -9 -n nvml-dump.json`); `mokka-capture diff nvml` reads
-  `.json.gz` directly.
-- **Commit one node of each kind in full.** A second node of the same kind is how
-  you learn which fields vary per unit (tray index, slot number, device minors),
-  but its files are nearly the first node's. Record in the `README.md` what
-  differed and how closely the two agreed (for example the share of NVML return
-  codes that matched) instead of committing it.
-- **Leave out bulk that a smaller file already summarises**: `lspci -vv` listings
-  (`host-lspci-*`), the NVLink error counters (`smi-nvlink-e.txt`) and the
-  supported-clocks table (`smi-q-d-SUPPORTED_CLOCKS.txt`, which `smi-q.xml` also
-  holds). Name what you left out in the `README.md`.
+- **gzip NVML dump**（`gzip -9 -n nvml-dump.json`）；`mokka-capture diff nvml` 可直接读取 `.json.gz`。
+- **每种型号完整提交一个节点。** 同型号的第二个节点可以让你了解哪些字段逐台变化（托盘索引、槽位号、设备次设备号），但其文件几乎与第一个节点相同。与其把它也提交，不如在 `README.md` 中记录差异以及两者的一致程度（例如匹配的 NVML 返回码占比）。
+- **省略已被更小文件总结的批量内容**：`lspci -vv` 列表（`host-lspci-*`）、NVLink 错误计数器（`smi-nvlink-e.txt`）和支持时钟表（`smi-q-d-SUPPORTED_CLOCKS.txt`，`smi-q.xml` 也包含它）。在 `README.md` 中写明省略了什么。
 
-Keep failures out of the committed tree except where they matter: a `README`
-note is better than an `errors.log` that names machines.
+除必要之处外，不要把失败留在提交树中：`README` 注释胜过一份点名机器的 `errors.log`。
 
-## Step 6: compare it with the mock
+## 第 6 步——与 mock 比对
 
-With a capture in hand you can measure how far a profile is from the real node.
-Each comparison is a command that takes the real capture and the same surface
-taken from the mock. In the commands, `REAL` is the real node's directory (a raw
-capture, or a committed one) and `MOCK` is a directory holding the mock's files.
+有了采集数据，就可以衡量某个 profile 距离真实节点有多远。每项比对都是一条命令，接受真实采集和从 mock 取到的同一接口面。命令中 `REAL` 是真实节点的目录（原始采集或已提交的采集），`MOCK` 是保存 mock 文件的目录。
 
-Take the mock's files with the same command, pointed at a Mokka cluster running
-the profile under test. `-mock` runs the driver commands in a stand-in pod and
-opts the pods into the mock ([A Mokka node](../tools/mokka-capture.md#a-mokka-node)
-says why), and `-dump-binary` is built for that cluster's architecture:
+用同样的命令获取 mock 的文件，指向运行着待测 profile 的 Mokka 集群。`-mock` 会在一个替代 Pod 中运行 driver 命令，并选择让 Pod 接受注入——原因见 [Mokka 节点](../tools/mokka-capture.md#a-mokka-node)——`-dump-binary` 则是为该集群架构构建的：
 
 ```bash
 bin/mokka-capture collect -mock -dump-binary <linux binary> -out mock all <node>
 MOCK=mock/<node>
 ```
 
-1. **Symbols.** Which of the real library's functions does the bridge answer?
-   `generate-bridge -symbols` reads the real library's exported symbols and says
-   how many the bridge implements, how many are generated stubs that answer
-   `NOT_SUPPORTED` where a real GPU answers something else, and which are
-   missing altogether. Give it the built mock library's symbols
-   (`nm -D --defined-only libnvidia-ml.so.1 | awk '{print $3}' | sort`) as
-   `-mock-symbols`; without them the report reads the bridge sources, which do not
-   show the legacy unversioned names the C shim exports, and counts them as
-   missing. `collect -mock` leaves `$MOCK/nvml-symbols.txt` empty, so take them
-   from the library you built:
+1. **符号。** 桥接实现了真实库中的哪些函数？`generate-bridge -symbols` 读取真实库导出的符号，说明桥接实现了多少个、其中多少个是生成的桩（在真实 GPU 有应答的地方，这些桩返回 `NOT_SUPPORTED`），以及哪些完全缺失。把构建出的 mock 库的符号（`nm -D --defined-only libnvidia-ml.so.1 | awk '{print $3}' | sort`）作为 `-mock-symbols` 传入。不传时，报告会读取桥接源码，而源码中看不到 C shim 导出的旧版无版本号名称，于是把它们算作缺失。`collect -mock` 会让 `$MOCK/nvml-symbols.txt` 为空，因此要从你构建的库中获取：
 
    ```bash
    go run ./cmd/generate-bridge -symbols "$REAL/nvml-symbols.txt" \
      -mock-symbols mock-nvml-symbols.txt
    ```
-2. **Values.** Compare the NVML dumps, which gives return-code and board-value
-   match rates and lists every difference:
+
+2. **数值。** 比对 NVML dump，它给出返回码和板卡数值的匹配率，并列出每处差异：
 
    ```bash
    bin/mokka-capture diff nvml "$REAL/nvml-dump.json.gz" "$MOCK/nvml-dump.json"
    ```
 
-   Field IDs differ between driver branches; the dump probes each ID and records
-   the per-field return code, so a changed layout shows up directly.
-3. **`nvidia-smi`.** Compare the two `-q -x` documents element by element:
+   字段 ID 在不同驱动分支间不同；dump 会探测每个 ID 并记录逐字段返回码，因此布局变化会直接显现。
+3. **`nvidia-smi`。** 逐元素比对两份 `-q -x` 文档：
 
    ```bash
    bin/mokka-capture diff smi "$REAL/smi-q.xml" "$MOCK/smi-q.xml"
    ```
 
-   The report says how many of the real document's elements the mock has, how
-   many carry the same value, and lists the missing elements and the differing
-   values. Values that are not a property of the board are not compared; the
-   report lists each of them, and [`diff smi`](../tools/mokka-capture.md#diff-smi)
-   says which they are.
-4. **Surfaces.** There is no tool for the `host-*`, `proc-*`, `rdma-*` and `net-*`
-   files. Read each against what the node agent renders for the profile, and
-   decide whether a difference matters. A real node and a mock differ in
-   numbering and counters, so this step has no pass or fail.
+   报告说明 mock 拥有真实文档中的多少元素、其中多少值相同，并列出缺失元素和不同值。不属于板卡属性的值不参与比对；报告会逐一列出它们，[`diff smi`](../tools/mokka-capture.md#diff-smi) 说明它们是哪些。
+4. **接口面。** 对 `host-*`、`proc-*`、`rdma-*` 和 `net-*` 文件没有工具可用。把它们与节点 agent 为该 profile 渲染的内容逐一对照，判断差异是否重要。真实节点与 mock 在编号和计数器上必然不同，因此这一步没有通过或失败。
 
-Report coverage per surface, for example "NVML return codes: 472 of 588 match".
-That is the number to quote for how much of the node a profile reproduces. Each
-diff ends by listing the values it did not compare; state those next to the
-score, since the score says nothing about them.
+按接口面报告覆盖率，例如"NVML 返回码：588 中匹配 472"。这个数字说明了某个 profile 能在多大程度上复现节点。每次 diff 最后都会列出它没有比对的值；请把它们与分数并列说明，因为分数对这些值不作任何陈述。
 
-## From capture to profile
+## 从采集到 profile
 
-1. Generate the profile from the committed capture, with an existing profile of
-   the same GPU as `-base` for what a capture cannot give (identifiers,
-   mock-only blocks); for a GPU with no profile yet, leave `-base` out:
+1. 从已提交的采集生成 profile，用同型号的一个现有 profile 作为 `-base`，提供采集无法给出的内容（标识符、仅 mock 才有的块）；对于尚无 profile 的 GPU，省略 `-base`：
 
    ```bash
    bin/mokka-capture profile \
@@ -305,42 +194,23 @@ score, since the score says nothing about them.
      tests/hardware-captures/<platform>/<node>
    ```
 
-   Every value's comment names its source in the capture, and `-explain` lists
-   each GPU's answer for every key; see
-   [`profile`](../tools/mokka-capture.md#profile). Fix a wrong value in the
-   rules, not in the generated file. The dump records the per-device NVLink
-   bandwidth-mode getters only, so a board whose mode is system-wide (Hopper)
-   takes `nvlink.bw_mode` from `-base`.
-2. Copy the result, and the `.mig.yaml` beside it, to
-   `deployments/nvml-mock/helm/nvml-mock/profiles/<name>.yaml` and
-   `profiles/mig/<name>.yaml`; the chart's copy is the source of truth, and the
-   one under `pkg/gpu/mocknvml/configs/` runs the library outside Kubernetes.
-   [Configuration](../configuration.md) documents every field.
-3. Add the capture to `goldens` in `internal/capture/profile/golden_test.go` and
-   run `go test ./internal/capture/profile -update`, so a later change to a rule
-   shows up as a diff of this profile.
-4. Deploy it and look: `tilt up -- --gpu-profile <name>`, then check that
-   `nvidia-smi` on the mock reports what the capture shows.
-5. Run the drift guard: `go test -tags=e2e ./tests/e2e/go/profile/...
-   ./tests/e2e/go/assertions/...` asserts derived expectations across all
-   profiles, so an inconsistent profile fails here before it fails on a cluster.
-6. Add the `nvidia-smi -q -x` fixture to
-   `tests/e2e/go/assertions/nvidiasmi/testdata/hardware/` with a row in that
-   folder's README. `hardware_test.go` asserts on readings, not on the parse
-   succeeding, because a renamed element decodes as absent rather than as an
-   error.
+   每个值的注释都指明它在采集中的来源，`-explain` 列出每块 GPU 对每个键的应答；参见 [`profile`](../tools/mokka-capture.md#profile)。如果值有错，要修正规则，而不是修改生成的文件。dump 只记录逐设备的 NVLink 带宽模式 getter，因此模式为系统级的板卡（Hopper）要从 `-base` 取 `nvlink.bw_mode`。
+2. 把结果及其旁边的 `.mig.yaml` 复制到 `deployments/nvml-mock/helm/nvml-mock/profiles/<name>.yaml` 和 `profiles/mig/<name>.yaml`；chart 中的副本是事实来源，`pkg/gpu/mocknvml/configs/` 下的那份用于在 Kubernetes 之外运行库。[配置参考](../configuration.md)记录了每个字段。
+3. 把该采集加入 `internal/capture/profile/golden_test.go` 中的 `goldens`，运行 `go test ./internal/capture/profile -update`，这样后续对规则的修改会显示为该 profile 的一处 diff。
+4. 部署并查看：`tilt up -- --gpu-profile <name>`，然后检查 mock 上的 `nvidia-smi` 是否报告采集所示内容。
+5. 运行防漂移守卫：`go test -tags=e2e ./tests/e2e/go/profile/... ./tests/e2e/go/assertions/...` 会对所有 profile 断言派生期望，因此不一致的 profile 会在这里失败，而不是等到集群上才失败。
+6. 把 `nvidia-smi -q -x` fixture 加入 `tests/e2e/go/assertions/nvidiasmi/testdata/hardware/`，并在该目录的 README 中添加一行。`hardware_test.go` 断言的是读数而非解析成功，因为元素改名会被解码为缺失，而不是错误。
 
-A rented or shared machine needs one more check before its capture is kept: confirm
-it has no MIG partitioning, no vGPU mode and no leftover processes.
+租用或共享的机器在保留其采集前还需一项检查：确认它没有 MIG 分区、没有 vGPU 模式、没有残留进程。
 
-## Troubleshooting
+## 排障
 
-| Symptom | Cause and fix |
-| --- | --- |
-| `TLS handshake timeout` or `connection refused` in `errors.log` | The API connection dropped. Restore it and rerun the part that failed; `collect` checks the connection before each node. |
-| `nvidia-smi: ... not recognized` for an option | The driver's `nvidia-smi` lacks it. The failure is the answer; keep it. |
-| `-q -d <section>` reports `Failed to parse` | The section name is not valid on this driver. Sections are captured one per file so one invalid name costs one file. |
-| `GLIBC` error running the dump | The driver container's libc is older than the build image's. Build the Linux `mokka-capture` on an image with an older base. |
-| `nvidia-ctk` not found | It is not in the driver container. The capture reads the CDI specs from the host and runs `nvidia-ctk` from the toolkit container. |
-| The host pod stays `Pending` | Pod security forbids privileged pods in the namespace. Set `-host-pod-namespace` to one that allows them. |
-| `/var/run/cdi` appears empty from the pod | `/var/run` is a symlink to `/run`, which resolves inside the pod. Read `/host/run/cdi`. |
+| 症状 | 原因与修复 |
+|---|---|
+| `errors.log` 中出现 `TLS handshake timeout` 或 `connection refused` | API 连接中断。恢复后重跑失败的部分；`collect` 会在每个节点前检查连接。 |
+| 某个选项报 `nvidia-smi: ... not recognized` | 驱动的 `nvidia-smi` 没有该选项。失败本身就是答案；保留它。 |
+| `-q -d <section>` 报 `Failed to parse` | 该 section 名在此驱动上无效。各 section 按文件分别采集，因此一个无效名字只损失一个文件。 |
+| 运行 dump 时出现 `GLIBC` 错误 | driver 容器的 libc 比构建镜像的旧。在基础更旧的镜像上构建 Linux 版 `mokka-capture`。 |
+| 找不到 `nvidia-ctk` | 它不在 driver 容器中。采集从宿主机读取 CDI 规格，并从 toolkit 容器运行 `nvidia-ctk`。 |
+| host Pod 一直处于 `Pending` | Pod 安全策略禁止在该命名空间运行特权 Pod。把 `-host-pod-namespace` 设为允许它们的命名空间。 |
+| 从 Pod 看 `/var/run/cdi` 为空 | `/var/run` 是指向 `/run` 的符号链接，在 Pod 内解析。请读取 `/host/run/cdi`。 |

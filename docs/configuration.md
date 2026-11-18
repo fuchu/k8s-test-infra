@@ -1,29 +1,29 @@
-# Configuration Reference
+# 配置参考
 
-Complete guide to Mock NVML configuration options.
+Mock NVML 配置选项完整指南。
 
-## Configuration Methods
+## 配置方式
 
-Mock NVML supports two configuration methods:
+Mock NVML 支持两种配置方式：
 
-| Method | Use Case | Flexibility |
+| 方式 | 适用场景 | 灵活性 |
 |--------|----------|-------------|
-| **YAML File** | Full control, per-device settings | High |
-| **Environment Variables** | Simple scenarios, CI/CD | Low |
+| **YAML 文件** | 完全控制，逐设备设置 | 高 |
+| **环境变量** | 简单场景、CI/CD | 低 |
 
-YAML configuration takes precedence when `MOCK_NVML_CONFIG` is set.
+设置 `MOCK_NVML_CONFIG` 时，YAML 配置优先。
 
-## Environment Variables
+## 环境变量
 
-| Variable | Description | Default |
+| 变量 | 说明 | 默认值 |
 |----------|-------------|---------|
-| `MOCK_NVML_CONFIG` | Path to YAML configuration file | (none) — the library then tries, in order, `config/config.yaml` in the driver root it was loaded from, the CDI mount `/etc/nvml-mock/config.yaml` and the NRI mount `/opt/nvml-mock/driver/config/config.yaml` |
-| `MOCK_MIG_PROFILES_CONFIG` | Path to the board's [MIG profile table](mig.md#declaring-the-profile-table), which lives in a document of its own | (none) — a sibling of `MOCK_NVML_CONFIG` is tried instead |
-| `MOCK_NVML_NUM_DEVICES` | Number of GPUs to simulate | 8 |
-| `MOCK_NVML_DRIVER_VERSION` | NVIDIA driver version string | 550.163.01 |
-| `MOCK_NVML_DEBUG` | Enable debug logging (any value) | (disabled) |
+| `MOCK_NVML_CONFIG` | YAML 配置文件路径 | （无）——库会依次尝试：加载它的驱动根目录下的 `config/config.yaml`、CDI 挂载路径 `/etc/nvml-mock/config.yaml`、NRI 挂载路径 `/opt/nvml-mock/driver/config/config.yaml` |
+| `MOCK_MIG_PROFILES_CONFIG` | 板卡的 [MIG profile 表](mig.md#declaring-the-profile-table) 路径，该表位于独立文档中 | （无）——改为尝试 `MOCK_NVML_CONFIG` 的同级文件 |
+| `MOCK_NVML_NUM_DEVICES` | 要模拟的 GPU 数量 | 8 |
+| `MOCK_NVML_DRIVER_VERSION` | NVIDIA 驱动版本字符串 | 550.163.01 |
+| `MOCK_NVML_DEBUG` | 开启调试日志（任意值） | （禁用） |
 
-**Example**:
+**示例**：
 
 ```bash
 export MOCK_NVML_NUM_DEVICES=4
@@ -31,29 +31,29 @@ export MOCK_NVML_DRIVER_VERSION=550.163.01
 LD_LIBRARY_PATH=. nvidia-smi
 ```
 
-## YAML Configuration Structure
+## YAML 配置结构
 
 ```yaml
-version: "1.0"                    # Config format version (required)
+version: "1.0"                    # 配置格式版本（必需）
 
-system:                           # System-level settings
-  driver_version: "550.163.01"    # Required; also gates which NVML functions exist and picks the nvidia-smi
+system:                           # 系统级设置
+  driver_version: "550.163.01"    # 必需；同时决定存在哪些 NVML 函数，并选择对应的 nvidia-smi
   nvml_version: "12.550.163.01"
   cuda_version: "12.4"
   cuda_version_major: 12
   cuda_version_minor: 4
-  driver_branch: "r550_00"        # Optional; derived from driver_version when unset
-  product_name: "VR NVL72"        # Optional; the DMI product name GFD labels nvidia.com/gpu.machine (default: the GPU name)
-  absent_features: not_supported  # Optional; what a feature the profile leaves out answers (default: legacy_defaults; see below)
-  hic:                            # Optional; host interface cards `nvidia-smi -q -u` prints
+  driver_branch: "r550_00"        # 可选；未设置时从 driver_version 推导
+  product_name: "VR NVL72"        # 可选；GFD 用该 DMI 产品名作为 nvidia.com/gpu.machine 标签（默认：GPU 名称）
+  absent_features: not_supported  # 可选；profile 未包含的功能如何应答（默认：legacy_defaults；见下文）
+  hic:                            # 可选；`nvidia-smi -q -u` 打印的主机接口卡
     - id: 0
       firmware_version: "1.2.3.4"
 
-device_defaults:                  # Default settings for all devices
+device_defaults:                  # 所有设备的默认设置
   name: "NVIDIA A100-SXM4-40GB"
-  # ... (see Device Properties below)
+  # ...（见下方"设备属性"）
 
-devices:                          # Per-device overrides
+devices:                          # 逐设备覆盖
   - index: 0
     uuid: "GPU-12345678-1234-1234-1234-123456780000"
     pci:
@@ -64,59 +64,48 @@ devices:                          # Per-device overrides
       bus_id: "0000:0F:00.0"
   # ...
 
-nvlink:                           # Optional NVLink configuration
+nvlink:                           # 可选，NVLink 配置
   version: 4
   links_per_gpu: 18
 ```
 
-## Device Properties
+## 设备属性
 
-### Basic Identification
+### 基本标识
 
 ```yaml
 device_defaults:
-  name: "NVIDIA A100-SXM4-40GB"      # GPU name shown in nvidia-smi
-  brand: "nvidia"                     # nvidia, tesla, quadro, geforce
-  serial: "1234567890123"             # Serial number
+  name: "NVIDIA A100-SXM4-40GB"      # nvidia-smi 中显示的 GPU 名称
+  brand: "nvidia"                     # nvidia、tesla、quadro、geforce
+  serial: "1234567890123"             # 序列号
   board_part_number: "900-21001-0000-000"
   vbios_version: "92.00.45.00.03"
-  hostname: "gpu-node-0"              # nvmlDeviceGetHostname_v1; Blackwell or newer
+  hostname: "gpu-node-0"              # nvmlDeviceGetHostname_v1；Blackwell 或更新架构
 
 devices:
   - index: 0
-    pdi: "0x9c1f4d2e8a7b6c50"         # nvmlDeviceGetPdi; quoted, 0x and up to 16 hex digits
+    pdi: "0x9c1f4d2e8a7b6c50"         # nvmlDeviceGetPdi；需加引号，0x 开头，最多 16 位十六进制数字
 ```
 
-The PDI (Per Device Identifier) is a 64-bit ID fused into each GPU, which
-`nvidia-smi -q` prints as `PDI` from driver 580. Without `pdi` the mock derives
-one from the GPU's UUID, so it differs between GPUs and stays the same in every
-process. Set it per device to report the IDs a captured node or an external
-inventory assigned. A MIG device reports the PDI of the GPU it is carved from.
+PDI（Per Device Identifier，逐设备标识符）是熔丝写入每块 GPU 的 64 位 ID，从 580 版驱动起 `nvidia-smi -q` 将其打印为 `PDI`。未设置 `pdi` 时，mock 会从 GPU 的 UUID 派生一个，因此各 GPU 之间不同，但在每个进程中保持一致。该值也可以逐设备设置，用来报告从真实节点采集或从外部资产清单分配的 ID。MIG 设备报告其所属 GPU 的 PDI。
 
-Write the value as a quoted string. YAML reads an unquoted `0x…` as a number,
-and the config is rejected with an error asking for quotes. Two devices that would
-report the same PDI, for example from one `pdi` set in `device_defaults`, are
-rejected too.
+该值必须以带引号的字符串形式写入。YAML 会把不带引号的 `0x…` 读作数字，配置会被拒绝并提示加引号。两台设备若报告相同 PDI（例如在 `device_defaults` 中设置了同一个 `pdi`），也会被拒绝。
 
-### Architecture
+### 架构
 
 ```yaml
 device_defaults:
-  architecture: "ampere"              # kepler, maxwell, pascal, volta, turing,
-                                      # ampere, ada, hopper, blackwell, rubin
+  architecture: "ampere"              # kepler、maxwell、pascal、volta、turing、
+                                      # ampere、ada、hopper、blackwell、rubin
   compute_capability:
     major: 8
     minor: 0
   num_gpu_cores: 6912
 ```
 
-Names are matched case-insensitively with surrounding whitespace trimmed, and
-`ada_lovelace` is accepted as a spelling of `ada`. An unrecognized name is
-logged as a warning and reported as `NVML_DEVICE_ARCH_UNKNOWN`, which fails
-every architecture-gated feature — T.Limit temperatures and GPM support among
-them.
+名称匹配不区分大小写，并会去除首尾空白；`ada_lovelace` 也可作为 `ada` 的写法被接受。无法识别的名称会记入警告日志，并上报为 `NVML_DEVICE_ARCH_UNKNOWN`，这会让所有受架构门槛限制的功能失败，包括 T.Limit 温度和 GPM 支持。
 
-### Memory
+### 显存
 
 ```yaml
 device_defaults:
@@ -137,9 +126,9 @@ device_defaults:
 ```yaml
 device_defaults:
   pci:
-    device_id: 0x20B010DE             # A100 device ID
+    device_id: 0x20B010DE             # A100 设备 ID
     subsystem_id: 0x134F10DE
-    bus_id: "0000:07:00.0"        # Usually per-device
+    bus_id: "0000:07:00.0"        # 通常逐设备设置
 
   pcie:
     max_link_gen: 4
@@ -151,91 +140,55 @@ device_defaults:
     rx_throughput_kbps: 0
 ```
 
-`lspci` sees these through the rendered sysfs tree and enumerates every GPU, but
-two of its lines are missing next to real hardware. `Kernel driver in use:
-nvidia` needs a `driver` symlink, which the tree does not render and the
-`libmockfs.so` shim could not surface anyway — it intercepts `open`/`stat`, not
-`readlink`. `Kernel modules:` needs libkmod, which fails to initialise in a
-container with no `/lib/modules`; that is where the `Unable to load libkmod
-resources: error -2` on `lspci -v` comes from, and a container on real hardware
-prints it too. Both are display-only: `lspci` still exits 0, and a consumer
-reading identity out of sysfs gets the full picture.
+`lspci` 通过渲染出的 sysfs 树看到这些信息，并枚举每块 GPU，但有两行与真实硬件相比缺失。`Kernel driver in use: nvidia` 需要一个 `driver` 符号链接，而该树不会渲染它，`libmockfs.so` shim 也无法提供——它拦截的是 `open`/`stat`，而不是 `readlink`。`Kernel modules:` 依赖 libkmod，在没有 `/lib/modules` 的容器中初始化失败；这就是 `lspci -v` 上 `Unable to load libkmod resources: error -2` 的来源，在真实硬件上的容器中同样会打印。两者都只影响显示：`lspci` 仍以 0 退出，从 sysfs 读取身份的消费者拿到的是完整信息。
 
-### Platform identity (rack location)
+### 平台标识（机架位置）
 
-Where the node's boards sit in a rack, which `nvidia-smi -q` renders as its
-`Platform Info` block. Rack-scale fault correlation reads it to turn a GPU fault
-into a physical location. Only `gb200`, `gb300` and `vrnvl72` ship it; on every other
-profile the whole block reads `N/A`, which is the correct reading for a board
-whose platform reports no location.
+节点各单板在机架中的位置，`nvidia-smi -q` 会将其渲染为 `Platform Info` 块。机架级故障关联会读取它，把 GPU 故障转换为物理位置。只有 `gb200`、`gb300` 和 `vrnvl72` 提供该信息；其他所有 profile 上整块显示 `N/A`，对于平台不上报位置的单板，这是正确的读法。
 
 ```yaml
 device_defaults:
   platform:
-    chassis_serial_number: "1822725100200"  # serial of the chassis (the rack)
-    slot_number: 21                 # absolute physical slot, switch trays included
-    tray_index: 11                  # position among compute trays only
-    host_id: 1                      # the OS domain within the tray — this node
-    peer_type: "switch_connected"    # or "direct_connected"
-    gpu_fabric_guid: "pdi"          # or a quoted hex value, set per device
+    chassis_serial_number: "1822725100200"  # 机箱（即机架）序列号
+    slot_number: 21                 # 绝对物理槽位，包含交换机托盘
+    tray_index: 11                  # 仅计算托盘中的位置
+    host_id: 1                      # 托盘内的操作系统域——即本节点
+    peer_type: "switch_connected"    # 或 "direct_connected"
+    gpu_fabric_guid: "pdi"          # 或带引号的十六进制值，逐设备设置
 
 devices:
   - index: 0
     platform:
-      module_id: 1                  # ID of this GPU within the node
+      module_id: 1                  # 该 GPU 在节点内的 ID
   - index: 1
     platform:
       module_id: 2
 ```
 
-Only `module_id` and `gpu_fabric_guid` vary between the GPUs of a node: NVML
-defines the module ID as the ID of the GPU within the node, while the location
-fields describe the node, which occupies exactly one tray in one slot of one
-chassis. Every field is settable per device anyway, and a device override merges
-field by field, so a device declares just its `module_id`.
+同一节点的各 GPU 之间只有 `module_id` 和 `gpu_fabric_guid` 不同：NVML 把模块 ID 定义为 GPU 在节点内的 ID，而位置字段描述的是节点——节点占据某个机箱某个槽位中的一个托盘。不过每个字段都可以逐设备设置，设备覆盖按字段合并，因此设备只需声明自己的 `module_id`。
 
-`slot_number` counts switch trays and compute trays alike while `tray_index`
-counts compute trays only, so on an NVL72 rack — 18 compute trays, 9 switch
-trays — slot runs ahead of tray for a tray above the switch group.
+`slot_number` 把交换机托盘和计算托盘一起计数，`tray_index` 只计计算托盘，因此在 NVL72 机架（18 个计算托盘、9 个交换机托盘）上，位于交换机组上方的托盘，其槽位号会大于托盘号。
 
-`peer_type` says how the GPU reaches its NVLink peers: `switch_connected`
-(through an NVSwitch tray) renders as `Switch Connected`, and anything else,
-including an absent key, renders as `Direct Connected`.
+`peer_type` 表示 GPU 如何到达其 NVLink 对等端：`switch_connected` 渲染为 `Switch Connected`，其他任何值（包括缺少该键）渲染为 `Direct Connected`。
 
-As everywhere else in a device override, a zero is indistinguishable from an
-unset key, so `module_id` numbers from 1.
+与设备覆盖中的其他地方一样，零与未设置的键无法区分，因此 `module_id` 从 1 开始编号。
 
-`gpu_fabric_guid` is the `GPU Fabric GUID` row of the block
-(`platform.gpu_fabric_guid` in `nvidia-smi --query-gpu`). NVLink fabric
-managers identify a GPU by it, so it has to differ between GPUs. It takes one
-of three forms:
+`gpu_fabric_guid` 是块中的 `GPU Fabric GUID` 行（`nvidia-smi --query-gpu` 中的 `platform.gpu_fabric_guid`）。NVLink fabric 管理器用它标识 GPU，因此各 GPU 之间必须不同。它有三种形式：
 
-| Value | Reported GUID | Use it for |
+| 值 | 上报的 GUID | 用途 |
 |-------|---------------|------------|
-| absent | `0x0000000000000000` | Boards nothing reads the GUID from |
-| `"pdi"` | The GPU's own PDI, derived or set with [`pdi`](#basic-identification) | Grace-Blackwell (GB200, GB300), whose captures report the PDI here |
-| `"0x…"` | The value as given | Boards that report a GUID of their own, such as B200 and Vera Rubin |
+| 缺失 | `0x0000000000000000` | 没有工具读取 GUID 的单板 |
+| `"pdi"` | GPU 自身的 PDI，通过 [`pdi`](#basic-identification) 派生或设置 | Grace-Blackwell（GB200、GB300），其采集数据在此报告 PDI |
+| `"0x…"` | 按给定值上报 | 自行报告 GUID 的单板，如 B200 和 Vera Rubin |
 
-`gb200` and `gb300` set `"pdi"` in `device_defaults`, so a tool that rewrites
-their UUIDs per node still gets a distinct GUID per GPU without listing one. A
-fixed value names one GPU, so it belongs in that GPU's `devices` entry. Two
-devices that would report the same GUID are rejected, whether it is fixed or
-taken from a PDI. The check covers every value known when the config loads; a
-GPU with no `uuid` and no `pdi` gets its PDI only at startup, so it is left out.
+`gb200` 和 `gb300` 在 `device_defaults` 中设置 `"pdi"`，因此即便逐节点重写 UUID 的工具也能为每块 GPU 得到不同的 GUID，无需逐一列出。固定值对应某一块 GPU，因此应放在该 GPU 的 `devices` 条目中。两台设备若报告相同 GUID，无论该值是固定的还是取自 PDI，都会被拒绝。检查会覆盖配置加载时已知的所有值；既没有 `uuid` 也没有 `pdi` 的 GPU 要到启动时才获得 PDI，因此不在检查之列。
 
-!!! note "Distinct within a node, not across nodes"
-    Every node that loads the same profile reports the same GPU UUIDs, and so
-    the same PDIs and fabric GUIDs. That is fine for software that reads one
-    node at a time. A consumer that compares fabric GUIDs across a rack, such
-    as an NVLink partition manager, sees GPUs on different nodes collide. To
-    simulate that rack, give each node a config with its own `uuid`, `pdi` or
-    `gpu_fabric_guid` values.
+!!! note "节点内唯一，而非跨节点唯一"
+    加载同一 profile 的每个节点都会报告相同的 GPU UUID，因而也报告相同的 PDI 和 fabric GUID。对一次只读取一个节点的软件来说这没有问题。而跨机架比较 fabric GUID 的消费者（例如 NVLink 分区管理器）会看到不同节点上的 GPU 发生冲突。要模拟这样的机架，请给每个节点一份配置，设置各自的 `uuid`、`pdi` 或 `gpu_fabric_guid` 值。
 
-Declaring the block also requires a driver new enough to have the API:
-`nvmlDeviceGetPlatformInfo` arrived in 560, so a profile on an older
-`system.driver_version` reports `N/A` regardless.
+声明该块还要求驱动足够新以具备相应 API：`nvmlDeviceGetPlatformInfo` 在 560 中引入，因此在 `system.driver_version` 更旧的 profile 上始终报告 `N/A`。
 
-### Power
+### 功耗
 
 ```yaml
 device_defaults:
@@ -246,16 +199,16 @@ device_defaults:
     enforced_limit_mw: 400000
     min_limit_mw: 100000              # 100W
     max_limit_mw: 400000              # 400W
-    current_draw_mw: 72000            # 72W (idle)
+    current_draw_mw: 72000            # 72W（空闲）
     power_state: "P0"
 ```
 
-### Thermal
+### 散热
 
 ```yaml
 device_defaults:
   thermal:
-    temperature_gpu_c: 33             # Current temperature
+    temperature_gpu_c: 33             # 当前温度
     temperature_memory_c: 31
     shutdown_threshold_c: 92
     slowdown_threshold_c: 87
@@ -263,128 +216,79 @@ device_defaults:
     target_temperature_c: 83
 ```
 
-How these thresholds are reported depends on `device_defaults.architecture`,
-as on real hardware. Ada and later expose them as signed T.Limit offsets
-(`nvmlDeviceGetMarginTemperature` and the `NVML_FI_DEV_TEMPERATURE_*_TLIMIT`
-field IDs), which `nvidia-smi -q` renders as the "T.Limit" rows. Pre-Ada
-architectures report `NVML_ERROR_NOT_SUPPORTED` for both, so `nvidia-smi -q`
-falls back to the absolute `GPU Shutdown / Slowdown / Max Operating Temp` rows.
+这些阈值的上报方式取决于 `device_defaults.architecture`，与真实硬件一致。Ada 及之后架构把它们暴露为有符号的 T.Limit 偏移（`nvmlDeviceGetMarginTemperature` 以及 `NVML_FI_DEV_TEMPERATURE_*_TLIMIT` 字段 ID），`nvidia-smi -q` 将其渲染为 "T.Limit" 行。Ada 之前的架构对两者都报告 `NVML_ERROR_NOT_SUPPORTED`，于是 `nvidia-smi -q` 回退到绝对的 `GPU Shutdown / Slowdown / Max Operating Temp` 行。
 
-By default the T.Limit view is derived from the absolute thresholds, measured
-from the slowdown threshold. A real driver reports the two views separately and
-they don't currently agree, so a profile captured from hardware can state the T.Limit
-view directly. The absolute thresholds above still answer
-`nvmlDeviceGetTemperatureThreshold`:
+默认情况下，T.Limit 视图由绝对阈值推导，以 slowdown 阈值为基准。真实驱动分别报告两种视图，目前二者并不一致，因此从硬件采集的 profile 可以直接声明 T.Limit 视图。上面的绝对阈值仍用于应答 `nvmlDeviceGetTemperatureThreshold`：
 
 ```yaml
   thermal:
     tlimit:
-      reference_c: 88      # the margin reads reference_c - current temperature
+      reference_c: 88      # 余量读作 reference_c - 当前温度
       shutdown_c: -5       # NVML_FI_DEV_TEMPERATURE_SHUTDOWN_TLIMIT
       slowdown_c: -2       # NVML_FI_DEV_TEMPERATURE_SLOWDOWN_TLIMIT
       max_operating_c: 0   # NVML_FI_DEV_TEMPERATURE_GPU_MAX_TLIMIT
 ```
 
-A distance left out of the block is derived as without it.
+块中省略的距离会按没有该块时的规则推导。
 
-### Fan
+### 风扇
 
 ```yaml
 device_defaults:
   fan:
-    count: 0                          # 0 = liquid cooled (A100 SXM)
+    count: 0                          # 0 = 液冷（A100 SXM）
     speed_percent: "N/A"
     target_speed_percent: "N/A"
 ```
 
-`count` gates the whole family. A device that declares no dedicated fans answers
-`NVML_ERROR_NOT_SUPPORTED` to every fan query, which `nvidia-smi` renders as
-`[N/A]` — the behaviour of every profile shipped with Mokka, matching every
-hardware capture in the repository, including the passively cooled L40S and T4
-PCIe boards.
+`count` 控制整个功能族。未声明专用风扇的设备对所有风扇查询都应答 `NVML_ERROR_NOT_SUPPORTED`，`nvidia-smi` 将其渲染为 `[N/A]`——这是 Mokka 自带所有 profile 的行为，与仓库中每一次硬件采集一致，包括被动散热的 L40S 和 T4 PCIe 板卡。
 
-A device that does declare fans reports the rest of the block. The fan block is
-per-device as well as a default, so a profile can mix a fanned board with
-fanless modules:
+声明了风扇的设备会上报块中其余内容。fan 块既可作为默认值也可逐设备设置，因此一个 profile 可以混合带风扇的板卡和无风扇的模组：
 
 ```yaml
 devices:
   - index: 0
     fan:
       count: 2
-      speed_percent: "40"             # what the fans are running at
-      target_speed_percent: "45"      # what the driver's curve is aiming for
-      max_speed_rpm: 5000             # tachometer reading at 100 %
-      min_speed_percent: 30           # floor a manual write may ask for
-      max_speed_percent: 90           # ceiling a manual write may ask for
+      speed_percent: "40"             # 风扇当前转速百分比
+      target_speed_percent: "45"      # 驱动曲线目标值
+      max_speed_rpm: 5000             # 100% 占空比时的转速表读数
+      min_speed_percent: 30           # 手动写入可请求的下限
+      max_speed_percent: 90           # 手动写入可请求的上限
 ```
 
-`speed_percent` and `target_speed_percent` are strings because `"N/A"` is a
-legitimate value: a board whose fans are driven but not reported. Anything
-unparseable is treated the same way.
+`speed_percent` 和 `target_speed_percent` 是字符串，因为 `"N/A"` 是合法值：风扇受控但不上报转速的板卡。任何无法解析的值也按同样方式处理。
 
-`max_speed_rpm` is scaled by the current duty cycle to answer
-`nvmlDeviceGetFanSpeedRPM`, so the fans above read 2000 RPM. Leaving it unset
-models a board whose fans are driven but not measured — the RPM reading is
-refused while the percentage still answers, which is a split real hardware
-shows.
+`max_speed_rpm` 会按当前占空比缩放以应答 `nvmlDeviceGetFanSpeedRPM`，因此上面的风扇读数为 2000 RPM。不设置它表示风扇受控但未测量——转速读数被拒绝，而百分比仍可应答，这是真实硬件上存在的分裂情况。
 
-`min_speed_percent` and `max_speed_percent` are the window
-`nvmlDeviceGetMinMaxFanSpeed` advertises and the bound `nvmlDeviceSetFanSpeed_v2`
-enforces; a write outside it is refused with `NVML_ERROR_INVALID_ARGUMENT`. An
-unset ceiling reads as 100.
+`min_speed_percent` 和 `max_speed_percent` 是 `nvmlDeviceGetMinMaxFanSpeed` 通告的窗口，也是 `nvmlDeviceSetFanSpeed_v2` 强制的边界；超出范围的写入会被拒绝并返回 `NVML_ERROR_INVALID_ARGUMENT`。未设置上限时按 100 处理。
 
-#### Fan control
+#### 风扇控制
 
-Each fan follows either the driver's temperature curve or a duty cycle a
-consumer asked for. `controls` seeds that state per fan, for a board that should
-come up under manual control:
+每个风扇要么遵循驱动的温度曲线，要么遵循消费者请求的占空比。`controls` 用于为这类状态设定初值，适用于启动后应处于手动控制的板卡：
 
 ```yaml
 fan:
   count: 2
   controls:
     - fan: 0
-      policy: manual                  # or "temperature", the default
+      policy: manual                  # 或 "temperature"（默认）
       speed_percent: 75
 ```
 
-`fan` is the index NVML's per-fan entry points address, so an entry naming a fan
-the device does not have is ignored rather than applied to one it does.
+`fan` 是 NVML 逐风扇入口点寻址所用的索引，因此指向设备不存在的风扇的条目会被忽略，而不会错误地应用到其他风扇。
 
-The four setters — `nvmlDeviceSetFanSpeed_v2`,
-`nvmlDeviceSetDefaultFanSpeed_v2`, `nvmlDeviceSetFanControlPolicy` and, through
-it, a policy switch — write to this state. Like the power management limit they
-are recorded in the runtime override document rather than in the writing
-process, so a later process reads the write back and it holds until a reset
-(`nvidia-smi -r`, or `nvml-mock-ctl reset`). A mock with nowhere to record the
-write refuses it with `NVML_ERROR_NO_PERMISSION` rather than reporting a success
-nothing would observe.
+四个 setter——`nvmlDeviceSetFanSpeed_v2`、`nvmlDeviceSetDefaultFanSpeed_v2`、`nvmlDeviceSetFanControlPolicy`，以及通过它进行的策略切换——都会写入该状态。与功耗管理限值一样，它们记录在运行时覆盖文档中，而不是记录在执行写入的进程里，因此后续进程能读回该写入，并保持到复位（`nvidia-smi -r` 或 `nvml-mock-ctl reset`）。如果 mock 无处记录写入，就会拒绝该写入并返回 `NVML_ERROR_NO_PERMISSION`，而不是报告一个无人能观察到的成功。
 
-Holding a fan at a duty cycle implies manual control, because a fan the driver
-is still steering by temperature would not stay where it was put.
-`nvmlDeviceSetDefaultFanSpeed_v2` returns the fan to the curve and drops the
-duty cycle with it. Switching to manual through `nvmlDeviceSetFanControlPolicy`
-does not invent one: the fan keeps running where it was until something asks for
-a different speed.
+将风扇保持在某个占空比意味着手动控制，因为仍在由驱动按温度控制的风扇不会停在设定位置。`nvmlDeviceSetDefaultFanSpeed_v2` 会让风扇回到温度曲线并同时放弃该占空比。通过 `nvmlDeviceSetFanControlPolicy` 切换到手动控制不会凭空产生占空比：风扇保持原有转速运行，直到有请求要求改变。
 
-Only part of this is visible through `nvidia-smi`. Versions 575 and 580 call
-just `nvmlDeviceGetFanSpeed`, which reports the board's first fan, so
-`--query-gpu=fan.speed` and the `<fan_speed>` element are the whole fan surface
-they expose: a manual write to fan 0 shows up there, and nothing else in this
-section does. The remaining entry points answer a consumer holding NVML
-directly.
+其中只有一部分能通过 `nvidia-smi` 看到。575 和 580 版本只调用 `nvmlDeviceGetFanSpeed`，它报告板卡的第一个风扇，因此 `--query-gpu=fan.speed` 和 `<fan_speed>` 元素就是它们暴露的全部风扇接口：对风扇 0 的手动写入会出现在那里，本节其他内容都不会出现。其余入口点服务于直接持有 NVML 的消费者。
 
-`nvml-mock-ctl fan` is a separate convenience path. It pins `speed_percent` and
-forces `count` to at least 1, so a speed becomes observable on a profile that
-ships fanless.
+`nvml-mock-ctl fan` 是一条独立的便捷路径。它会固定 `speed_percent` 并强制 `count` 至少为 1，从而在默认无风扇的 profile 上也能观察到转速。
 
-#### S-class units
+#### S 级单元
 
-`nvmlUnitGetFanSpeedInfo` reports the fans of an S-class chassis. Units are the
-management processors of the S870/S1070 generation; nothing Mokka models has
-one, and nor does any GPU a modern driver sees, so the unit enumeration is
-empty. `nvidia-smi -q -u` reports a node with no units rather than failing:
+`nvmlUnitGetFanSpeedInfo` 报告 S 级机箱的风扇。单元是 S870/S1070 代的管理处理器；Mokka 建模的任何设备都没有该单元，现代驱动看到的 GPU 也没有，因此单元枚举为空。`nvidia-smi -q -u` 会报告节点没有单元，而不是失败：
 
 ```console
 $ nvidia-smi -q -u
@@ -392,9 +296,9 @@ HIC Info                                  : N/A
 Attached Units                            : 0
 ```
 
-There is no configuration for units, and no handle the unit queries will accept.
+没有针对单元的配置，也没有单元查询可以接受的句柄。
 
-### Clocks
+### 时钟
 
 ```yaml
 device_defaults:
@@ -413,67 +317,39 @@ device_defaults:
     video_max: 1290
 ```
 
-`graphics_max` answers two rows of `nvidia-smi -q`, not one: Max Clocks and Max
-Customer Boost Clocks. NVML keeps them apart — the second is an OEM-defined
-ceiling that may legally sit below the boost maximum — but every real board
-captured in `tests/e2e/go/assertions/nvidiasmi/testdata/hardware` reports the two
-as equal, so the mock resolves both from this key rather than carrying a second
-one that profiles would have to keep in step by hand. A profile with no
-`graphics_max` reports both rows as `N/A`.
+`graphics_max` 应答 `nvidia-smi -q` 的两行而非一行：Max Clocks 和 Max Customer Boost Clocks。NVML 将二者区分开——后者是 OEM 定义的上限，合法地可以低于 boost 最大值——但 `tests/e2e/go/assertions/nvidiasmi/testdata/hardware` 中采集的每块真实板卡都报告两者相等，因此 mock 用同一个键解析两者，而不是额外携带一个需要 profile 手工保持同步的键。没有 `graphics_max` 的 profile 两行都报告 `N/A`。
 
-Only the graphics domain answers the customer-boost row; `nvidia-smi` emits no
-other child under it. `nvmlDeviceGetClock` resolves the whole clock-type ×
-clock-id matrix from the keys above, and returns `NVML_ERROR_NOT_SUPPORTED` for
-the combinations no key carries — application clocks for the SM and video
-domains, and the OEM ceiling for anything but graphics.
+只有 graphics 域应答 customer-boost 行；`nvidia-smi` 在其下不输出其他子项。`nvmlDeviceGetClock` 从上面的键解析完整的"时钟类型 × 时钟 ID"矩阵，对于没有键承载的组合返回 `NVML_ERROR_NOT_SUPPORTED`——即 SM 和 video 域的应用时钟，以及非 graphics 域的 OEM 上限。
 
-#### Supported clocks
+#### 支持的时钟
 
 ```yaml
 device_defaults:
   supported_clocks:
-    memory_clocks:                    # highest first, as NVML returns them
+    memory_clocks:                    # 从高到低，NVML 的返回顺序
       - freq_mhz: 2619
-        graphics_clocks: [1980, 1965, 1950, 1935]   # truncated; see h100.yaml
+        graphics_clocks: [1980, 1965, 1950, 1935]   # 已截断；参见 h100.yaml
       - freq_mhz: 1593
         graphics_clocks: [1980, 1965, 1950, 1935]
 ```
 
-The table is what `nvidia-smi -q -d SUPPORTED_CLOCKS` and
-`--query-supported-clocks` print, and the set of pairs `nvidia-smi -ac`
-accepts. The shipped profiles carry the full table their board reports in
-`tests/e2e/go/assertions/nvidiasmi/testdata/hardware`, and a unit test keeps
-them equal. A profile without the block reports the section as `N/A`.
+该表是 `nvidia-smi -q -d SUPPORTED_CLOCKS` 和 `--query-supported-clocks` 打印的内容，也是 `nvidia-smi -ac` 接受的参数对集合。自带 profile 携带其在 `tests/e2e/go/assertions/nvidiasmi/testdata/hardware` 中对应板卡上报的完整表，并有单元测试保证两者相等。没有该块的 profile 会把该节报告为 `N/A`。
 
-The mock models one P-state: the device's `performance_state`. The table
-supplies its clock envelope (`nvmlDeviceGetMinMaxClockOfPState`,
-`nvmlDeviceGetPerformanceModes`), and any other P-state is reported as not
-supported.
+mock 只建模一个 P-state：设备的 `performance_state`。该表提供其时钟包络（`nvmlDeviceGetMinMaxClockOfPState`、`nvmlDeviceGetPerformanceModes`），其他任何 P-state 都报告为不支持。
 
-#### Tuning clocks at runtime
+#### 运行时调整时钟
 
-The tuning commands write to the runtime override document, the same way
-[`nvidia-smi -pl`](#static-held-until-the-config-changes) does. Every process
-on the node sees the result, and it holds until the matching reset command,
-`nvidia-smi -r`, or `nvml-mock-ctl reset`.
+调整命令与 [`nvidia-smi -pl`](#static-held-until-the-config-changes) 一样写入运行时覆盖文档。节点上的每个进程都能看到结果，并保持到对应的复位命令、`nvidia-smi -r` 或 `nvml-mock-ctl reset`。
 
-| Command | Effect on the readings |
+| 命令 | 对读数的影响 |
 |---------|------------------------|
-| `-ac <mem,graphics>` / `-rac` | Sets the applications clocks. A pair missing from `supported_clocks` is refused, and `-rac` restores the `*_app_default` pair |
-| `-lgc <min,max>` / `-rgc` | Clamps the current graphics and SM clocks into the range |
-| `-lmc <min,max>` / `-rmc` | Clamps the current memory clock into the range |
+| `-ac <mem,graphics>` / `-rac` | 设置应用时钟。`supported_clocks` 中不存在的参数对会被拒绝；`-rac` 恢复 `*_app_default` 参数对 |
+| `-lgc <min,max>` / `-rgc` | 把当前 graphics 和 SM 时钟限制在该范围内 |
+| `-lmc <min,max>` / `-rmc` | 把当前显存时钟限制在该范围内 |
 
-The locked ranges are stored as `clocks.locked_graphics` and
-`clocks.locked_memory` (`min_mhz`, `max_mhz`), so a profile can also start a
-device locked. `-rgc` and `-rmc` unlock the GPU even then, because unlocked
-is the driver default. A full reset (`nvidia-smi -r` or `nvml-mock-ctl
-reset`) drops every runtime write instead, so the profile's lock comes back.
-NVML's symbolic bounds behave as in `nvml.h`: unlimited on both
-ends unlocks, a mix of a symbolic bound and a MHz bound is refused, and the
-TDP bound is not supported.
+锁定的范围存为 `clocks.locked_graphics` 和 `clocks.locked_memory`（`min_mhz`、`max_mhz`），因此 profile 也可以让设备以锁定状态启动。即便如此，`-rgc` 和 `-rmc` 也会解锁 GPU，因为未锁定是驱动默认状态。完全复位（`nvidia-smi -r` 或 `nvml-mock-ctl reset`）则会丢弃所有运行时写入，于是 profile 中的锁定重新生效。NVML 的符号边界行为与 `nvml.h` 一致：两端都是无限制表示解锁，符号边界与 MHz 边界混用会被拒绝，TDP 边界不支持。
 
-Clock offsets (`nvmlDeviceSetClockOffsets` and the `*ClkVfOffset` calls) are
-opt-in, because no captured board reports them:
+时钟偏移（`nvmlDeviceSetClockOffsets` 和 `*ClkVfOffset` 系列调用）是可选开启的，因为没有采集到的板卡报告它们：
 
 ```yaml
 device_defaults:
@@ -481,12 +357,10 @@ device_defaults:
     offsets:
       graphics: {min_mhz: -200, max_mhz: 300}
       memory: {min_mhz: 0, max_mhz: 1000}
-    adaptive_clocking: "enabled"      # or "disabled"; absent = not supported
+    adaptive_clocking: "enabled"      # 或 "disabled"；缺失 = 不支持
 ```
 
-An offset write is range-checked and read back, but it does not move the
-reported clocks. Auto boost (`--auto-boost-default`) is refused as not
-supported, matching the `N/A` every Pascal-or-newer board reports.
+偏移写入会进行范围检查并可被读回，但不会改变上报的时钟。自动 boost（`--auto-boost-default`）被拒绝为不支持，与 Pascal 及更新板卡一律报告 `N/A` 一致。
 
 ```yaml
 device_defaults:
@@ -501,11 +375,10 @@ device_defaults:
     sw_thermal_slowdown: false
     display_clocks_setting: false
 
-    # Cumulative time each cause has already cost the GPU, in microseconds.
-    # The flags above answer "is it throttled now"; these answer "how long has
-    # it been", which is what a slow workload is diagnosed from. Omit the block
-    # for a GPU that has never been throttled: every counter then reports 0 us,
-    # which is an answer, where the pre-#678 N/A was not.
+    # 每种原因已经让 GPU 损失的累计时间，单位为微秒。
+    # 上面的标志回答"现在是否受限"，这些回答"已持续多久"，
+    # 诊断慢工作负载靠的是后者。对于从未受限的 GPU 可省略该块：
+    # 此时每个计数器都报告 0 us，这是一个有效答案，而 #678 之前的 N/A 不是。
     counters:
       sw_power_cap_us: 39595
       sync_boost_us: 0
@@ -514,35 +387,18 @@ device_defaults:
       hw_power_brake_slowdown_us: 0
 ```
 
-A per-device `clocks_throttle_reasons` block replaces the `device_defaults` one
-wholesale rather than merging into it, as `memory`, `power`, `thermal` and
-`clocks` already do. A `devices:` entry carrying only `counters` therefore drops
-the inherited flags, so restate the ones that still apply — which is why the
-`gpu_idle: true` above is repeated in each per-device block of
-`tests/mocknvml/util-test-config.yaml`.
+逐设备的 `clocks_throttle_reasons` 块会整体替换 `device_defaults` 中的块，而不是像 `memory`、`power`、`thermal` 和 `clocks` 那样合并。因此，如果 `devices:` 条目只带 `counters`，就会丢失继承来的标志，需要重新声明仍然适用的项——这也是 `tests/mocknvml/util-test-config.yaml` 中每个逐设备块都重复 `gpu_idle: true` 的原因。
 
-The counters appear under `Clocks Event Reasons Counters` in `nvidia-smi -q`,
-and are readable through `nvmlDeviceGetFieldValues` (the path DCGM uses) and
-`nvmlDeviceGetViolationStatus`. A device accrues further time on top of its
-configured baseline for as long as the matching flag is set. Accrual is per
-process, like the dynamic-metrics simulator: a long-lived consumer such as
-dcgm-exporter watches the counter climb, while each `nvidia-smi` invocation
-accrues only over its own lifetime and so reports essentially the baseline.
+这些计数器在 `nvidia-smi -q` 中出现在 `Clocks Event Reasons Counters` 下，并可通过 `nvmlDeviceGetFieldValues`（DCGM 使用的路径）和 `nvmlDeviceGetViolationStatus` 读取。只要对应标志置位，设备就会在配置的基线之上继续累加时间。累加是逐进程的，与动态指标模拟器一样：像 dcgm-exporter 这样的长驻消费者会看到计数器增长，而每次 `nvidia-smi` 调用只在自身生命周期内累加，因此基本报告基线值。
 
-That per-process scope is why the flags and the counters have to be configured
-to agree rather than agreeing by construction. A GPU thrown into a throttle
-state at runtime carries no history: `nvidia-smi` renders the reason `Active`
-beside a counter of a microsecond or two, which is the age of that `nvidia-smi`
-process and not of the throttle. To describe a GPU that has been throttling for
-a while, seed the counter alongside the flag — both land in the same override
-document, so the second command keeps the first:
+正是这种逐进程范围决定了标志和计数器必须配置成一致，而不能指望它们天然一致。运行时被置入受限状态的 GPU 没有历史记录：`nvidia-smi` 会把原因渲染为 `Active`，旁边计数器只有一两微秒，那是 `nvidia-smi` 进程的寿命而非受限状态的寿命。要描述已经受限一段时间的 GPU，就把计数器与标志一起预置——两者写入同一个覆盖文档，因此第二条命令会保留第一条：
 
 ```bash
 nvml-mock-ctl throttle --gpu 3 thermal
 nvml-mock-ctl set --gpu 3 clocks_throttle_reasons.counters.hw_thermal_slowdown_us=39595
 ```
 
-### Performance
+### 性能
 
 ```yaml
 device_defaults:
@@ -586,92 +442,68 @@ device_defaults:
 
 #### SRAM ECC
 
-Hardware counts on-die SRAM errors separately from the DRAM counters above and
-reports them through their own API, so they are a sibling block rather than
-another memory location under `errors`. Omitting the block reports zeros, which
-is what a healthy ECC-enabled GPU does; with ECC off the counters are reported
-unsupported (`N/A`), as on real hardware.
+硬件把片上 SRAM 错误与上面的 DRAM 计数器分开统计，并通过独立 API 报告，因此它是一个同级块，而不是 `errors` 下的另一个内存位置。省略该块时报告零，这是健康且启用 ECC 的 GPU 的表现；关闭 ECC 时计数器报告为不支持（`N/A`），与真实硬件一致。
 
 ```yaml
 device_defaults:
   ecc:
     sram:
-      volatile:                         # reset when the driver reloads
+      volatile:                         # 驱动重新加载时复位
         correctable: 0
         uncorrectable_parity: 0
         uncorrectable_secded: 0
-      aggregate:                        # persisted in the InfoROM
+      aggregate:                        # 持久化在 InfoROM 中
         correctable: 0
         uncorrectable_parity: 0
         uncorrectable_secded: 0
-      # Which unit reported the aggregate uncorrectable errors; nvidia-smi
-      # renders it as "Aggregate Uncorrectable SRAM Sources".
+      # 哪个单元报告了聚合不可纠正错误；nvidia-smi
+      # 将其渲染为 "Aggregate Uncorrectable SRAM Sources"。
       uncorrectable_sources:
         l2: 0
         sm: 0
         microcontroller: 0
         pcie: 0
         other: 0
-      # Whether the accumulated errors passed the driver's threshold — the
-      # signal that the GPU needs servicing rather than just a count going up.
+      # 累积错误是否超过驱动阈值——
+      # 这是 GPU 需要维护而不仅仅是计数增长的信号。
       threshold_exceeded: false
 ```
 
-Inject these at runtime with `nvml-mock-ctl sram-ecc` (see
-[nvml-mock-ctl.md](nvml-mock-ctl.md)).
+可在运行时用 `nvml-mock-ctl sram-ecc` 注入这些错误（参见 [nvml-mock-ctl.md](nvml-mock-ctl.md)）。
 
-How `nvidia-smi` renders these counters depends on the profile's
-`architecture`, mirroring real hardware: Ampere and later split the uncorrectable
-count into `SRAM Uncorrectable Parity` and `SRAM Uncorrectable SEC-DED` and print
-the source breakdown and threshold flag, while pre-Ampere (`t4`) prints one
-combined `SRAM Uncorrectable` row and omits the rest. The configuration is the
-same either way — only the presentation differs.
+`nvidia-smi` 如何渲染这些计数器取决于 profile 的 `architecture`，与真实硬件一致：Ampere 及之后架构把不可纠正计数拆为 `SRAM Uncorrectable Parity` 和 `SRAM Uncorrectable SEC-DED`，并打印来源明细和阈值标志；Ampere 之前（`t4`）只打印一行合并的 `SRAM Uncorrectable`，其余省略。两种情况下配置相同——只是呈现方式不同。
 
-#### Memory repair state
+#### 内存修复状态
 
-Health agents decide between a reset, a row remap and a replacement from three
-queries: the repair status, the unrepairable-memory flag and the SRAM unique
-uncorrectable error counts. They are derived from the state above and from
-[`remapped_rows`](#remapped-rows), so an injected fault moves all of them
-together:
+健康 agent 依据三个查询在复位、行重映射和更换之间决策：修复状态、不可修复内存标志，以及 SRAM 唯一不可纠正错误计数。它们由上面的状态和 [`remapped_rows`](#remapped-rows) 推导，因此注入一次故障会让三者一起变化：
 
-| Query | Reports | Architecture |
+| 查询 | 报告内容 | 架构 |
 |---|---|---|
-| Repair status | A channel repair is pending when `remapped_rows.pending` is set or an `ecc_uncorrectable` failure is injected. A TPC repair is never pending. | Ampere and later |
-| Unrepairable-memory flag | Set when `remapped_rows.failure_occurred` is set, an `ecc_uncorrectable` failure is injected, or `ecc.sram.threshold_exceeded` is set. | Hopper and later |
-| SRAM unique uncorrectable errors | One entry per non-zero `ecc.sram.uncorrectable_sources` unit, carrying the unit and its count. | Blackwell and later, with ECC on |
+| 修复状态 | 设置 `remapped_rows.pending` 或注入 `ecc_uncorrectable` 故障时，通道修复处于待处理；TPC 修复从不待处理 | Ampere 及之后 |
+| 不可修复内存标志 | 设置 `remapped_rows.failure_occurred`、注入 `ecc_uncorrectable` 故障或设置 `ecc.sram.threshold_exceeded` 时置位 | Hopper 及之后 |
+| SRAM 唯一不可纠正错误 | 每个非零 `ecc.sram.uncorrectable_sources` 单元一条，带单元名和计数 | Blackwell 及之后，且 ECC 开启 |
 
-Earlier architectures report each query as unsupported.
+更早的架构对每个查询都报告不支持。
 
-The same NVML calls write back. They persist in the runtime override document,
-so a separate process sees the result:
+同样的 NVML 调用也会写入，结果持久化在运行时覆盖文档中，因此独立进程能看到：
 
-- `nvidia-smi -e` sets `mode_pending` only; `mode_current` takes it when the GPU
-  is reset with [`nvidia-smi -r`](nvml-mock-ctl.md#reset-via-nvidia-smi), as on
-  hardware.
-- Clearing the volatile or aggregate error counters zeroes the DRAM and SRAM
-  counters of that scope. Clearing the aggregate scope also zeroes
-  `uncorrectable_sources` and `threshold_exceeded`, which are derived from the
-  counters.
-- Setting the DRAM encryption mode writes `dram_encryption.mode_pending`.
+- `nvidia-smi -e` 只设置 `mode_pending`；GPU 通过 [`nvidia-smi -r`](nvml-mock-ctl.md#reset-via-nvidia-smi) 复位后 `mode_current` 才会采用它，与硬件一致。
+- 清除易失性或聚合错误计数器会清零该范围的 DRAM 和 SRAM 计数器。清除聚合范围还会清零由计数器推导出的 `uncorrectable_sources` 和 `threshold_exceeded`。
+- 设置 DRAM 加密模式会写入 `dram_encryption.mode_pending`。
 
 ```yaml
 device_defaults:
   ecc:
-    dram_encryption:        # Blackwell and later; earlier parts report it unsupported
+    dram_encryption:        # Blackwell 及之后；更早芯片报告不支持
       mode_current: "disabled"
       mode_pending: "disabled"
 ```
 
-The InfoROM validation query succeeds for any profile with an `inforom` block.
-Its configuration checksum is a CRC-32 of the declared versions, so it is stable
-for a profile and differs between profiles with different InfoROM versions.
+只要 profile 有 `inforom` 块，InfoROM 校验查询就会成功。其配置校验和是所声明版本的 CRC-32，因此对同一 profile 稳定，对不同 InfoROM 版本的 profile 则不同。
 
-### Remapped rows
+### 重映射行
 
-`availability_histogram` is how many memory banks still have spare rows to remap
-future failures. Row remapping is Ampere and later, so leaving the block out —
-as `t4` does — reports the histogram as unsupported.
+`availability_histogram` 表示还有多少内存库留有备用行可用于重映射未来的故障。行重映射是 Ampere 及之后的功能，因此省略该块（如 `t4`）会把直方图报告为不支持。
 
 ```yaml
 device_defaults:
@@ -681,14 +513,14 @@ device_defaults:
     pending: false
     failure_occurred: false
     availability_histogram:
-      max: 640                          # banks with full spare capacity
+      max: 640                          # 备用容量满的内存库
       high: 0
       partial: 0
       low: 0
-      none: 0                           # banks with no capacity left
+      none: 0                           # 已无剩余容量的内存库
 ```
 
-### Display
+### 显示
 
 ```yaml
 device_defaults:
@@ -697,93 +529,56 @@ device_defaults:
     active: "disabled"
 ```
 
-### Modes
+### 模式
 
 ```yaml
 device_defaults:
   persistence_mode: "enabled"
-  compute_mode: "default"             # default, exclusive_thread,
-                                      # prohibited, exclusive_process
-  addressing_mode: "hmm"              # hmm, ats, none
-  egm: false                          # Extended GPU Memory capability
+  compute_mode: "default"             # default、exclusive_thread、
+                                      # prohibited、exclusive_process
+  addressing_mode: "hmm"              # hmm、ats、none
+  egm: false                          # 扩展 GPU 内存能力
 ```
 
-`addressing_mode` is the `Addressing Mode` row of `nvidia-smi -q`: how the GPU
-reaches memory the host allocated with `malloc` or `mmap`. It belongs to the
-host as much as the board: `hmm` needs kernel support, and `ats` needs a Grace
-CPU translating over NVLink-C2C. The same GPU on the same driver can report
-either, so each built-in profile declares the mode its captured node reported.
-A `devices[]` entry can set it for one GPU. Leaving the key unset, or
-misspelling it, renders `N/A`. The row needs a driver
-of `580` or newer: on an older profile the query does not exist, as on real
-hardware.
+`addressing_mode` 是 `nvidia-smi -q` 中的 `Addressing Mode` 行：GPU 如何访问宿主用 `malloc` 或 `mmap` 分配的内存。它与单板一样属于主机：`hmm` 需要内核支持，`ats` 需要 Grace CPU 通过 NVLink-C2C 做转换。同一块 GPU 在同一驱动下可能报告其中任一种，因此每个内置 profile 都声明其采集节点上报的模式。`devices[]` 条目可为单块 GPU 设置该值。不设置键或拼错都会渲染为 `N/A`。该行需要 `580` 或更新的驱动：更旧的 profile 上不存在该查询，与真实硬件一致。
 
-`egm` sets the EGM bit of `nvmlDeviceGetCapabilities`, the `EGM` row under
-`Capabilities` in `nvidia-smi -q`. The host's kernel module turns Extended GPU
-Memory on, so it is off unless a profile sets it; `vrnvl72` does, as its
-captured tray reported. A `devices[]` entry can turn it on for one GPU.
+`egm` 设置 `nvmlDeviceGetCapabilities` 的 EGM 位，即 `nvidia-smi -q` 中 `Capabilities` 下的 `EGM` 行。宿主机内核模块开启扩展 GPU 内存，因此默认关闭，除非 profile 设置；`vrnvl72` 按其采集托盘的情况设置了该位。`devices[]` 条目可为单块 GPU 开启它。
 
-### Features a profile leaves out
+### profile 未包含的功能
 
-`system.absent_features` sets what a feature the profile leaves out answers:
+`system.absent_features` 设置 profile 未包含的功能如何应答：
 
-- `not_supported`: `NOT_SUPPORTED`, which `nvidia-smi` renders as `N/A`, as on
-  a real GPU without the feature. A profile checked against a capture of real
-  hardware sets it; `vrnvl72` does.
-- `legacy_defaults`, the default: the mock's built-in values, as if the
-  feature existed. The other profiles were written before captures were
-  available and rely on these values, so they keep them until each is checked
-  against its capture. An unknown value also keeps them, and the mock logs a
-  warning.
+- `not_supported`：返回 `NOT_SUPPORTED`，`nvidia-smi` 渲染为 `N/A`，与没有该功能的真实 GPU 一致。对照真实硬件采集数据校验过的 profile 会设置它；`vrnvl72` 就是如此。
+- `legacy_defaults`（默认）：mock 的内置值，仿佛该功能存在。其他 profile 写于采集数据可得之前，依赖这些值，因此在各自与采集数据校验之前保持原样。未知值也会保留这些值，并记录一条警告。
 
-| Profile key left out | NVML calls that answer `NOT_SUPPORTED` |
+| 缺失的 profile 键 | 应答 `NOT_SUPPORTED` 的 NVML 调用 |
 |---|---|
 | `gpu_operation_mode` | `nvmlDeviceGetGpuOperationMode` |
-| `retired_pages` | `nvmlDeviceGetRetiredPages`, `nvmlDeviceGetRetiredPages_v2`, `nvmlDeviceGetRetiredPagesPendingStatus` |
-| `ecc.dram_encryption` | `nvmlDeviceGetDramEncryptionMode`, `nvmlDeviceSetDramEncryptionMode` |
-| `thermal.temperature_memory_c` | `nvmlDeviceGetTemperatureThreshold` for the memory maximum |
-| `thermal.target_temperature_c` | `nvmlDeviceGetTemperatureThreshold` for the acoustic thresholds (the target temperature and its range) |
-| none | `nvmlDeviceGetTemperatureThreshold` for the GPS threshold |
+| `retired_pages` | `nvmlDeviceGetRetiredPages`、`nvmlDeviceGetRetiredPages_v2`、`nvmlDeviceGetRetiredPagesPendingStatus` |
+| `ecc.dram_encryption` | `nvmlDeviceGetDramEncryptionMode`、`nvmlDeviceSetDramEncryptionMode` |
+| `thermal.temperature_memory_c` | 显存最大值对应的 `nvmlDeviceGetTemperatureThreshold` |
+| `thermal.target_temperature_c` | 声学阈值（目标温度及其范围）对应的 `nvmlDeviceGetTemperatureThreshold` |
+| 无 | GPS 阈值对应的 `nvmlDeviceGetTemperatureThreshold` |
 
-With `accounting` disabled, `nvmlDeviceGetAccountingPids` lists no processes
-and `nvmlDeviceGetAccountingStats` answers `NOT_FOUND`, instead of
-`NOT_SUPPORTED`.
+关闭 `accounting` 时，`nvmlDeviceGetAccountingPids` 不列出进程，`nvmlDeviceGetAccountingStats` 应答 `NOT_FOUND`，而不是 `NOT_SUPPORTED`。
 
-### NVLink telemetry on a 615 driver
+### 615 驱动上的 NVLink 遥测
 
-A `615` or newer driver reports NVLink counters through field values only. As
-on a real 615 tray, these answer `NOT_SUPPORTED` for every link:
+`615` 或更新的驱动只通过字段值报告 NVLink 计数器。与真实 615 托盘一样，以下对每条链路都应答 `NOT_SUPPORTED`：
 
-- `nvmlDeviceGetNvLinkErrorCounter` and `nvmlDeviceGetNvLinkUtilizationCounter`
-- the per-link speed fields (`NVML_FI_DEV_NVLINK_SPEED_MBPS_L0`–`L11` and
-  `_COMMON`, ids 84–90 and 132–137)
-- the data-link error fields (`NVML_FI_DEV_NVLINK_ERROR_DL_REPLAY`, `_RECOVERY`,
-  `_CRC`, ids 161–163)
+- `nvmlDeviceGetNvLinkErrorCounter` 和 `nvmlDeviceGetNvLinkUtilizationCounter`
+- 逐链路速率字段（`NVML_FI_DEV_NVLINK_SPEED_MBPS_L0`–`L11` 和 `_COMMON`，ID 84–90 与 132–137）
+- 数据链路错误字段（`NVML_FI_DEV_NVLINK_ERROR_DL_REPLAY`、`_RECOVERY`、`_CRC`，ID 161–163）
 
-The NVLink5 counter fields (`NVML_FI_DEV_NVLINK_COUNT_*`) keep answering. They
-are what `nvidia-smi nvlink -e` reads, and where an
-[NVLink error injection](#nvlink-error-injection-per-device) shows.
+NVLink5 计数字段（`NVML_FI_DEV_NVLINK_COUNT_*`）仍会应答。`nvidia-smi nvlink -e` 读取的正是它们，[NVLink 错误注入](#nvlink-error-injection-per-device)也体现在这里。
 
-Unlike `system.absent_features` above, this follows the driver version, not the
-profile: which calls exist is the driver's. Any profile run on a `615` driver
-answers this way, `gb300` with `driverVersion: 615.71.09` included, and older
-drivers keep answering the getters and fields.
+与上面的 `system.absent_features` 不同，这取决于驱动版本而非 profile：存在哪些调用由驱动决定。任何 profile 在 `615` 驱动上都会这样应答，包括 `driverVersion: 615.71.09` 的 `gb300`；更旧的驱动仍会应答这些 getter 和字段。
 
-### Drain, removal and exclusion
+### 排空、移除与排除
 
-These model what the driver does with a GPU rather than the GPU itself: taking
-a GPU out of service while the driver stays loaded, and a GPU the driver was
-told never to manage. NVML addresses all of them by PCI address
-(domain, bus and device; the function is ignored), and a GPU that matches none
-returns `NVML_ERROR_INVALID_ARGUMENT`.
+这些模拟的是驱动处理 GPU 的方式，而非 GPU 本身：一是在驱动保持加载时把 GPU 退出服务，二是驱动被告知永不管理的 GPU。NVML 都通过 PCI 地址（域、总线和设备号；功能号被忽略）寻址它们，不匹配的 GPU 返回 `NVML_ERROR_INVALID_ARGUMENT`。
 
-**Exclusion** is configuration. A device marked `excluded`, the equivalent of
-listing it in the kernel module's `NVreg_ExcludedGpus`, is never enumerated:
-the remaining GPUs are numbered as if it were absent. It is reported only by
-`nvmlGetExcludedDeviceCount` and `nvmlGetExcludedDeviceInfoByIndex`, with its
-PCI address and UUID, which is what `nvidia-smi -B` lists. Set it per device,
-typically in a [per-device override](#per-device-overrides), or at runtime with
-`nvml-mock-ctl set --gpu 3 excluded=true`:
+**排除**属于配置。标记为 `excluded` 的设备（等同于把它列入内核模块的 `NVreg_ExcludedGpus`）永远不会被枚举：其余 GPU 的编号会像它不存在一样。它只由 `nvmlGetExcludedDeviceCount` 和 `nvmlGetExcludedDeviceInfoByIndex` 报告，附带 PCI 地址和 UUID，这正是 `nvidia-smi -B` 列出的内容。该标记可以逐设备设置，通常在[逐设备覆盖](#per-device-overrides)中完成，也可以在运行时用 `nvml-mock-ctl set --gpu 3 excluded=true` 完成：
 
 ```yaml
 devices:
@@ -791,25 +586,17 @@ devices:
     excluded: true
 ```
 
-**Drain and removal** are runtime state, set by a consumer through NVML and
-recorded in the [runtime override document](nvml-mock-ctl.md) as the
-`draining` and `removed` fields. Like a power cap, they are visible to every
-process on the node and hold until a reset clears them (`nvml-mock-ctl reset`).
-The bundled `nvidia-smi` has no drain subcommand, so to drain a GPU without
-writing an NVML client, set the field directly:
-`nvml-mock-ctl set --gpu 1 draining=true`.
+**排空与移除**属于运行时状态，由消费者通过 NVML 设置，并作为 `draining` 和 `removed` 字段记录在[运行时覆盖文档](nvml-mock-ctl.md)中。与功耗上限一样，它们对节点上每个进程都可见，并保持到复位清除（`nvml-mock-ctl reset`）。随附的 `nvidia-smi` 没有 drain 子命令，因此若不想写 NVML 客户端就要排空 GPU，可直接设置该字段：`nvml-mock-ctl set --gpu 1 draining=true`。
 
-| Call | Effect | Refused with `NVML_ERROR_IN_USE` when |
+| 调用 | 效果 | 以下情况拒绝并返回 `NVML_ERROR_IN_USE` |
 |------|--------|---------------------------------------|
-| `nvmlDeviceModifyDrainState` | Marks the GPU draining, or clears the mark. A process that initialises afterwards does not enumerate a draining GPU; processes that already see it keep it. | Draining a GPU in persistence mode — run `nvidia-smi -pm 0` first |
-| `nvmlDeviceQueryDrainState` | Reports whether the GPU is draining. | — |
-| `nvmlDeviceRemoveGpu` | Detaches the GPU from the driver. Every process stops enumerating it, the calling one included, and the rest are renumbered. The calling process's handles to the GPU, its MIG devices and instances return `NVML_ERROR_INVALID_ARGUMENT` from then on. | The GPU is in persistence mode, or the device has configured `processes` |
-| `nvmlDeviceDiscoverGpus` | Re-attaches removed GPUs: all of them when domain, bus and device are zero, otherwise the one at that address. As in NVML, the `busId` string is not read. A rediscovered GPU is no longer draining. | — |
+| `nvmlDeviceModifyDrainState` | 标记 GPU 正在排空，或清除标记。之后初始化的进程不会枚举正在排空的 GPU；已经看到它的进程保留它 | 对处于 persistence 模式的 GPU 执行排空——先运行 `nvidia-smi -pm 0` |
+| `nvmlDeviceQueryDrainState` | 报告 GPU 是否正在排空。 | — |
+| `nvmlDeviceRemoveGpu` | 把 GPU 从驱动中摘除。所有进程都停止枚举它，包括调用方，其余 GPU 重新编号。此后调用方持有的该 GPU、其 MIG 设备和实例的句柄都返回 `NVML_ERROR_INVALID_ARGUMENT` | GPU 处于 persistence 模式，或设备配置了 `processes` |
+| `nvmlDeviceDiscoverGpus` | 重新挂载已移除的 GPU：域、总线和设备号都为 0 时挂载全部，否则挂载该地址对应的 GPU。与 NVML 一样，`busId` 字符串不被读取。重新发现的 GPU 不再处于排空状态 | — |
 
 !!! note
-    A process that is already running sees a removal or rediscovery made by
-    another process only once it next calls `nvmlInit`. The process that made
-    the change sees it immediately.
+    已经在运行的进程只有在下次调用 `nvmlInit` 时才能看到其他进程所做的移除或重新发现。做出更改的进程会立即看到。
 
 ### MIG
 
@@ -821,23 +608,18 @@ device_defaults:
     max_gpu_instances: 7
 ```
 
-Those three keys are the whole of `device_defaults.mig`, and they are all a
-profile needs to describe what the silicon can do. The board's partition
-table, where that table lives, and the two ways to declare a layout have a
-page of their own: [MIG](mig.md).
+这三个键就是 `device_defaults.mig` 的全部，也是 profile 描述芯片能力所需的全部。单板的分区表、该表所在位置以及声明布局的两种方式有专门一页：[MIG](mig.md)。
 
-### Virtualization
+### 虚拟化
 
 ```yaml
 device_defaults:
   virtualization:
-    mode: "none"                    # none, passthrough, vgpu, host_vgpu
-    host_vgpu_mode: "N/A"           # host_vgpu only: sriov, non_sriov
+    mode: "none"                    # none、passthrough、vgpu、host_vgpu
+    host_vgpu_mode: "N/A"           # 仅 host_vgpu：sriov、non_sriov
 ```
 
-`vgpu` and `host_vgpu` simulate the two sides of NVIDIA vGPU and take a
-`virtualization.vgpu` block; its fields, defaults and validation are on a page
-of their own: [vGPU](vgpu.md).
+`vgpu` 和 `host_vgpu` 模拟 NVIDIA vGPU 的两侧，需要一个 `virtualization.vgpu` 块；其字段、默认值和校验在专门一页：[vGPU](vgpu.md)。
 
 ### InfoROM
 
@@ -850,45 +632,30 @@ device_defaults:
     pwr_object: "1.0"
 ```
 
-### Accounting
+### 计费（Accounting）
 
-Per-process accounting is what `nvidia-smi --query-accounted-apps` and DCGM's
-job statistics read. With `mode: "enabled"` the buffer holds a record for every
-configured [process](#processes) still running, plus the `terminated` records
-you declare for processes that have already exited:
+逐进程计费是 `nvidia-smi --query-accounted-apps` 和 DCGM 作业统计读取的内容。`mode: "enabled"` 时，缓冲区为每条仍在运行的已配置[进程](#processes)保留一条记录，再加上你为已退出进程声明的 `terminated` 记录：
 
 ```yaml
 device_defaults:
   accounting:
-    mode: "enabled"                   # enabled, disabled
-    buffer_size: 4000                 # records kept; the oldest drop first
-    terminated:                       # oldest first
+    mode: "enabled"                   # enabled、disabled
+    buffer_size: 4000                 # 保留的记录数；最旧的先丢弃
+    terminated:                       # 最旧的在前
       - pid: 3131
-        gpu_util: 62                  # lifetime GPU utilization %
-        mem_util: 31                  # lifetime memory utilization %
+        gpu_util: 62                  # 生命周期内 GPU 利用率 %
+        mem_util: 31                  # 生命周期内显存利用率 %
         max_memory_mib: 1024
-        time_ms: 120000               # how long it ran
+        time_ms: 120000               # 运行时长
 ```
 
-A running process's record takes its utilization and memory from its
-`processes` entry and reports a run time of 0, as NVML does until a process
-exits. Every process counts as started when the driver loaded. If a PID appears
-twice, the later record wins, which matches NVML reusing a PID after the first
-process exited.
+运行中进程的记录从它的 `processes` 条目取利用率和显存，并报告运行时间为 0，这与 NVML 在进程退出前的做法一致。每个进程都算作在驱动加载时启动。如果同一 PID 出现两次，后出现的记录胜出，这与 NVML 在第一个进程退出后复用 PID 的行为一致。
 
-With accounting disabled, and on a GPU with MIG enabled, the accounting queries
-return `NVML_ERROR_NOT_SUPPORTED`. A PID with no record returns
-`NVML_ERROR_NOT_FOUND`. `nvmlDeviceGetAccountingStats_v2` needs a configured
-driver of `600` or newer.
+关闭计费时，以及在启用 MIG 的 GPU 上，计费查询返回 `NVML_ERROR_NOT_SUPPORTED`。没有记录的 PID 返回 `NVML_ERROR_NOT_FOUND`。`nvmlDeviceGetAccountingStats_v2` 要求配置的驱动为 `600` 或更新。
 
-`nvidia-smi -am` (`nvmlDeviceSetAccountingMode`) and `nvidia-smi -caa`
-(`nvmlDeviceClearAccountingPids`) are recorded in the
-[runtime override document](nvml-mock-ctl.md), like a power cap. Clearing
-drops the terminated records and keeps the running ones. Disabling accounting
-drops the terminated records too, so they do not come back when it is enabled
-again. Both calls are refused on a GPU with MIG enabled.
+`nvidia-smi -am`（`nvmlDeviceSetAccountingMode`）和 `nvidia-smi -caa`（`nvmlDeviceClearAccountingPids`）与功耗上限一样记录在[运行时覆盖文档](nvml-mock-ctl.md)中。清除会丢弃终止记录，保留运行中记录。关闭计费也会丢弃终止记录，因此再次开启时它们不会回来。在启用 MIG 的 GPU 上，两个调用都会被拒绝。
 
-### Encoder/Decoder
+### 编码器/解码器
 
 ```yaml
 device_defaults:
@@ -903,60 +670,46 @@ device_defaults:
     average_latency_us: 0
 ```
 
-### Processes
+### 进程
 
-`processes` drive the running-process queries, `nvmlDeviceGetProcessUtilization`,
-`nvmlDeviceGetProcessesUtilizationInfo` and the running records in
-[accounting](#accounting). The utilization fields
-(`sm_util`/`mem_util`/`enc_util`/`dec_util`, all percent) are reported for every
-process, whatever its type.
+`processes` 驱动运行中进程查询、`nvmlDeviceGetProcessUtilization`、`nvmlDeviceGetProcessesUtilizationInfo`，以及[计费](#accounting)中的运行中记录。利用率字段（`sm_util`/`mem_util`/`enc_util`/`dec_util`，均为百分比）对所有类型的进程都会上报。
 
-`type` decides which running-process query reports the process:
+`type` 决定哪个运行中进程查询会报告该进程：
 
-| `type` | Reported by |
+| `type` | 报告者 |
 |--------|-------------|
-| `C` (or omitted) | `nvmlDeviceGetComputeRunningProcesses` |
+| `C`（或省略） | `nvmlDeviceGetComputeRunningProcesses` |
 | `G` | `nvmlDeviceGetGraphicsRunningProcesses` |
-| `M` | `nvmlDeviceGetMPSComputeRunningProcesses` only |
+| `M` | 仅 `nvmlDeviceGetMPSComputeRunningProcesses` |
 
-An `M` process is an MPS client. Under MPS (Multi-Process Service) a client's
-work runs in the MPS server's context, so NVML lists the server among the
-compute processes and the client only in the MPS list. To model an MPS node,
-declare the server as a `C` process named `nvidia-cuda-mps-server` and its
-clients as `M`. `nvmlDeviceGetRunningProcessDetailList` returns the same
-processes as the query for its mode, or all of them for
-`NVML_PROCESS_MODE_ALL`. The mock does not run an MPS daemon.
+`M` 进程是 MPS 客户端。在 MPS（Multi-Process Service）下，客户端的工作运行在 MPS server 的上下文中，因此 NVML 把 server 列入计算进程，而客户端只出现在 MPS 列表中。要建模 MPS 节点，把 server 声明为名为 `nvidia-cuda-mps-server` 的 `C` 进程，其客户端声明为 `M`。`nvmlDeviceGetRunningProcessDetailList` 返回与其模式对应的查询相同的进程，`NVML_PROCESS_MODE_ALL` 则返回全部。mock 不会运行 MPS 守护进程。
 
-They also show up in `nvidia-smi`: the default table's Processes box, `-q`, and
-`--query-compute-apps`. Two caveats there — `nvidia-smi` labels every row `M+C+G`
-regardless of `type`, because the call it enumerates processes through carries no
-type field, and `nvidia-smi pmon` uses a different entry point that the mock does
-not implement, so it lists nothing.
+它们也会出现在 `nvidia-smi` 中：默认表格的 Processes 框、`-q` 和 `--query-compute-apps`。这里有两点需要注意——`nvidia-smi` 给每一行都标注 `M+C+G`，无论 `type` 如何，因为它枚举进程所用的调用不带类型字段；`nvidia-smi pmon` 使用 mock 未实现的另一个入口点，因此不列出任何内容。
 
 ```yaml
 device_defaults:
   processes:
     - pid: 1234
-      type: "C"                       # C=compute, G=graphics
+      type: "C"                       # C=计算，G=图形
       name: "python"
       used_memory_mib: 1024
-      sm_util: 75                     # SM (compute) utilization %
-      mem_util: 40                    # memory-bandwidth utilization %
+      sm_util: 75                     # SM（计算）利用率 %
+      mem_util: 40                    # 显存带宽利用率 %
     - pid: 5678
       type: "G"
       name: "ffmpeg"
       used_memory_mib: 512
-      enc_util: 60                    # encoder utilization %
-      dec_util: 30                    # decoder utilization %
+      enc_util: 60                    # 编码器利用率 %
+      dec_util: 30                    # 解码器利用率 %
     - pid: 9012
-      type: "M"                       # MPS client
+      type: "M"                       # MPS 客户端
       name: "train.py"
       used_memory_mib: 4096
 ```
 
-## Per-Device Overrides
+## 逐设备覆盖
 
-Override any property for specific devices:
+覆盖指定设备的任意属性：
 
 ```yaml
 devices:
@@ -965,7 +718,7 @@ devices:
     minor_number: 0
     pci:
       bus_id: "0000:07:00.0"
-    # Override thermal for this device only
+    # 仅覆盖该设备的散热设置
     thermal:
       temperature_gpu_c: 35
 
@@ -978,18 +731,11 @@ devices:
       temperature_gpu_c: 37
 ```
 
-`index` is the NVML enumeration position and the key the override matches on.
-`minor_number` is the `N` in `/dev/nvidia<N>`, which the agent stages and both
-CDI specs point at. It defaults to the index — the numbering a driver produces
-when it probes in PCI enumeration order — so set it only to describe a node
-where the two differ.
+`index` 是 NVML 枚举位置，也是覆盖项匹配的键。`minor_number` 是 `/dev/nvidia<N>` 中的 `N`，由 agent 部署，两个 CDI 规格都指向它。它默认为 index——驱动按 PCI 枚举顺序探测时产生的编号——因此只有在描述两者不同的节点时才设置。
 
-Minor numbers are a permutation of the device indices: remapping one device
-means remapping whichever device held the minor it took. A profile that leaves
-two devices on the same minor is rejected, defaults included, as is a minor
-outside 0-254 (255 is `nvidiactl`).
+次设备号是设备索引的一个排列：重映射一台设备意味着重映射占用了它原来次设备号的那台设备。即使包含默认值，让两台设备使用同一次设备号的 profile 也会被拒绝，超出 0-254 的次设备号同样会被拒绝（255 是 `nvidiactl`）。
 
-## NVLink Configuration
+## NVLink 配置
 
 ```yaml
 nvlink:
@@ -998,110 +744,67 @@ nvlink:
   bandwidth_per_link_mbps: 26562
   c2c_enabled: false
   multi_node: false
-  nvle_enabled: false                # see bandwidth mode, low power and NVLE
-  bw_mode:                           # see bandwidth mode, low power and NVLE
+  nvle_enabled: false                # 见"带宽模式、低功耗与 NVLE"
+  bw_mode:                           # 见"带宽模式、低功耗与 NVLE"
     scope: system
   links:
     - link: 0
       state: "active"
       remote_device_type: "GPU"
       remote_pci_bus_id: "0000:0F:00.0"
-  switches:                          # see NVSwitches below
+  switches:                          # 见下方"NVSwitch"
     - bdf: "0000:05:00.0"
       uuid: "NVSwitch-H100-0000-0000-0000-000000000000"
       device_id: 0x22A310DE
 ```
 
-`c2c_enabled` is node-level and drives the `GPU C2C Mode` row of `nvidia-smi -q`
-on every attached GPU: `true` reports `Enabled`, while `false` or an absent key
-reports `N/A` — never `Disabled`, because NVML answers
-`NVML_ERROR_NOT_SUPPORTED`, the correct reading for a board with no NVLink-C2C
-link to a host CPU. Only `gb200`, `gb300` and `vrnvl72` enable it. This is the only key that
-drives the row: `device_defaults.features.nvlink_c2c` is descriptive metadata and
-is not read.
+`c2c_enabled` 是节点级设置，驱动所有挂载 GPU 的 `nvidia-smi -q` 中的 `GPU C2C Mode` 行：`true` 报告 `Enabled`，而 `false` 或缺少该键报告 `N/A`——绝不会是 `Disabled`，因为 NVML 应答 `NVML_ERROR_NOT_SUPPORTED`，这对于没有 NVLink-C2C 连接到宿主 CPU 的单板是正确读法。只有 `gb200`、`gb300` 和 `vrnvl72` 启用它。这是驱动该行的唯一键：`device_defaults.features.nvlink_c2c` 只是描述性元数据，不会被读取。
 
-`multi_node` marks a board whose NVLink domain spans nodes, as in a rack-scale
-NVLink system, as opposed to an NVLink fabric that stays on one baseboard, such
-as HGX H100 or B200. Of the shipped profiles, `gb200`, `gb300` and `vrnvl72`
-set it. On such a node the
-node agent stages the IMEX capability surface the DRA driver's ComputeDomain
-plugin reads: a substitute `/proc/devices` entry, the `fabric-imex-mgmt`
-capability file and the `channel0` device node, the only channel the driver of
-a real node creates on its own. The chart's `imex.deviceNumbers` values set
-their device majors; a major the node's kernel already gives to another driver
-is replaced by a free one from 384 to 511. A node whose surface cannot be
-staged stays ready without IMEX, and the node agent logs why.
+`multi_node` 标记 NVLink 域跨越节点的单板，例如机架级 NVLink 系统，与 HGX H100 或 B200 这类停留在单基板上的 NVLink fabric 相对。自带 profile 中，`gb200`、`gb300` 和 `vrnvl72` 设置了它。在这样的节点上，节点 agent 会部署 DRA 驱动的 ComputeDomain 插件读取的 IMEX 能力接口：一个替代的 `/proc/devices` 条目、`fabric-imex-mgmt` 能力文件和 `channel0` 设备节点——真实节点的驱动只自行创建这一个通道。chart 的 `imex.deviceNumbers` 值设置它们的设备主设备号；节点内核已分配给其他驱动的主设备号会被替换为 384 到 511 之间的空闲号。无法部署该接口的节点仍保持就绪，只是没有 IMEX，节点 agent 会记录原因。
 
-### Bandwidth mode, low power and NVLE
+### 带宽模式、低功耗与 NVLE
 
-Three optional node-level keys sit here. `h100`, `b200`, `gb200` and `gb300`
-declare `bw_mode`, and `gb300` also declares `firmware`; an omitted key reports
-the default below:
+三个可选的节点级键位于此处。`h100`、`b200`、`gb200` 和 `gb300` 声明 `bw_mode`，`gb300` 还声明 `firmware`；省略的键采用下面的默认值：
 
 ```yaml
 nvlink:
-  nvle_enabled: true                 # default false; the NVLE: row of `nvidia-smi nvlink --info`
-  bw_mode:                           # default: none; every bandwidth-mode call answers NOT_SUPPORTED
-    scope: device                    # system or device
-    supported: [0, 1, 2, 3, 4]       # default: all five
-    mode: 0                          # default: the best supported mode
-  firmware:                          # default: none, which renders as N/A
+  nvle_enabled: true                 # 默认 false；`nvidia-smi nvlink --info` 中的 NVLE: 行
+  bw_mode:                           # 默认：none；所有带宽模式调用应答 NOT_SUPPORTED
+    scope: device                    # system 或 device
+    supported: [0, 1, 2, 3, 4]       # 默认：全部五种
+    mode: 0                          # 默认：支持的最佳模式
+  firmware:                          # 默认：none，渲染为 N/A
     mse: "15:3:0"
 ```
 
-NVLink Reduced Bandwidth Mode comes as two independent NVML function families,
-and a real board answers on one and declines the other. `bw_mode.scope` picks
-the one that answers; the other returns `NVML_ERROR_NOT_SUPPORTED`. A `scope`
-that names neither is warned about and treated as an absent block.
+NVLink 降带宽模式由两个独立的 NVML 函数族提供，真实板卡会对其中一个应答、拒绝另一个。`bw_mode.scope` 选择应答的那一个；另一个返回 `NVML_ERROR_NOT_SUPPORTED`。既不指向其中之一的 `scope` 会收到警告，并视为缺少该块。
 
 | | `scope: system` | `scope: device` |
 |---|---|---|
-| NVML | `nvmlSystemGetNvlinkBwMode`, `nvmlSystemSetNvlinkBwMode` | `nvmlDeviceGetNvlinkBwMode`, `nvmlDeviceSetNvlinkBwMode`, `nvmlDeviceGetNvlinkSupportedBwModes` |
-| `nvidia-smi` | `nvlink -gBwMode`, `nvlink -sBwMode` | no flag reaches it — NVML callers only |
-| Shipped profiles | `h100` | `b200`, `gb200`, `gb300`, `vrnvl72` |
+| NVML | `nvmlSystemGetNvlinkBwMode`、`nvmlSystemSetNvlinkBwMode` | `nvmlDeviceGetNvlinkBwMode`、`nvmlDeviceSetNvlinkBwMode`、`nvmlDeviceGetNvlinkSupportedBwModes` |
+| `nvidia-smi` | `nvlink -gBwMode`、`nvlink -sBwMode` | 没有参数能到达它——仅供 NVML 调用方使用 |
+| 自带 profile | `h100` | `b200`、`gb200`、`gb300`、`vrnvl72` |
 
-Either way, `supported` is the set the setter accepts, and the reported mode is
-the last value a setter recorded, else `mode`, else the best supported mode.
+无论哪种情况，`supported` 都是 setter 接受的集合，上报的模式是 setter 最后记录的值，否则为 `mode`，否则为支持的最佳模式。
 
-!!! note "Choosing a scope for a new profile"
-    The NVML reference documents the node-wide family for Hopper or newer and
-    the per-device family for Blackwell or newer. The `nvidia-smi` manual,
-    however, marks `-gBwMode` and `-sBwMode` deprecated for Blackwell, and a
-    real GB300 answers `-gBwMode` with `Getting nvlink bandwidth mode is not
-    supported`. A Hopper board therefore takes `system`, a Blackwell board
-    `device`, and a board before Hopper omits the block. On a `device` profile
-    the mode is visible to NVML callers only.
+!!! note "为新 profile 选择 scope"
+    NVML 参考文档把节点级的函数族记录为 Hopper 或更新，把逐设备的函数族记录为 Blackwell 或更新。然而 `nvidia-smi` 手册把 `-gBwMode` 和 `-sBwMode` 标注为在 Blackwell 上已弃用，真实 GB300 对 `-gBwMode` 的应答是 `Getting nvlink bandwidth mode is not supported`。因此 Hopper 板卡选 `system`，Blackwell 板卡选 `device`，Hopper 之前的板卡省略该块。在 `device` profile 上，该模式只有 NVML 调用方能看到。
 
-The `nvidia-smi` manual documents the five mode names and what each does, but
-nothing states which index the NVML calls carry for a name. The mapping below
-was established against the `nvidia-smi` the mock image bundles, and the set
-stops at four because a sixth value would index past its name table.
+`nvidia-smi` 手册记录了五种模式名称及其作用，但没有说明 NVML 调用对某个名称携带哪个索引。下面的映射是通过 mock 镜像随附的 `nvidia-smi` 确定的，集合止于四，因为第六个值会超出其名称表的索引范围。
 
-| Value | Name | Effect |
+| 值 | 名称 | 效果 |
 |---|---|---|
-| 0 | `FULL` | all links at maximum bandwidth |
-| 1 | `OFF` | NVLink unused; GPU-to-GPU traffic inside the node goes over PCIe instead |
-| 2 | `MIN` | minimum speed |
-| 3 | `HALF` | about half of `FULL` |
-| 4 | `3QUARTER` | about 75% of `FULL` |
+| 0 | `FULL` | 所有链路以最大带宽运行 |
+| 1 | `OFF` | 不使用 NVLink；节点内 GPU 间流量改走 PCIe |
+| 2 | `MIN` | 最低速率 |
+| 3 | `HALF` | 约为 `FULL` 的一半 |
+| 4 | `3QUARTER` | 约为 `FULL` 的 75% |
 
-A `supported` value above 4 is accepted, since the indices are the driver's and
-a later one may define more. With `scope: system` it has no name to print, and
-the profile is warned about it; with `scope: device` no `nvidia-smi` flag shows
-it, so it is not (`vrnvl72` lists the tray's 0, 4, ... 36). A `mode` outside the effective `supported` set is ignored with
-a warning and the best supported mode is reported instead —
-`nvmlDeviceSetNvlinkBwMode` answers `NVML_ERROR_INVALID_ARGUMENT` for that very
-value, so honouring it would have the getter hand out a mode the setter refuses.
+大于 4 的 `supported` 值会被接受，因为索引由驱动定义，后续版本可能定义更多。在 `scope: system` 下它没有可打印的名称，profile 会收到警告；在 `scope: device` 下没有 `nvidia-smi` 参数显示它，因此不会被显示（`vrnvl72` 列出该托盘的 0、4、……36）。超出有效 `supported` 集合的 `mode` 会被忽略并警告，改为报告支持的最佳模式——`nvmlDeviceSetNvlinkBwMode` 对该值应答 `NVML_ERROR_INVALID_ARGUMENT`，如果照单全收，getter 就会给出一个 setter 拒绝的模式。
 
-`mode` is an initial value only. Both setters record into the config override
-document rather than into process memory, so a mode set by one process is read
-by every other process on the node and outlives the writer. A node-wide write
-also clears the per-device records, which would otherwise outrank it. Inspect
-either with [`nvml-mock-ctl status`](nvml-mock-ctl.md#status--inspect-active-overrides).
+`mode` 只是初始值。两个 setter 都写入配置覆盖文档而不是进程内存，因此一个进程设置的模式会被节点上所有其他进程读到，并比写入者活得更久。节点级写入还会清除逐设备记录，否则后者优先级更高。可用 [`nvml-mock-ctl status`](nvml-mock-ctl.md#status--inspect-active-overrides) 查看任一者。
 
-`firmware` fills the `Firmware Version:` rows that `nvlink --info` prints under
-`NVLE:`. Each value is `major:minor:subMinor` — the form `nvidia-smi` prints —
-so a line read off real hardware transfers to a profile unchanged:
+`firmware` 填充 `nvlink --info` 在 `NVLE:` 下打印的 `Firmware Version:` 行。每个值都是 `major:minor:subMinor`——即 `nvidia-smi` 打印的格式——因此从真实硬件上读到的一行可以不加改动地搬进 profile：
 
 ```yaml
 nvlink:
@@ -1113,33 +816,18 @@ nvlink:
     netir_dln: "0:10:0"
 ```
 
-The five keys are the microcontrollers NVML defines a ucode type for
-(`NVML_NVLINK_FIRMWARE_UCODE_TYPE_MSE` through `..._NETIR_DLN`), and
-`nvidia-smi` renders them in that order whatever order the profile lists it in.
-A sixth is not expressible, which is deliberate: `nvidia-smi` abandons the
-whole `--info` render on a ucode type it cannot label. Omit a key and
-its row is left out; omit the block and the table is empty, which `nvidia-smi`
-renders as `Firmware Version: N/A`. A value that is not three unsigned
-colon-separated parts is dropped with a warning rather than failing the load.
-`gb300` ships the set above, read off a GB300 NVL; no other profile declares
-one.
+这五个键是 NVML 定义了 ucode 类型的微控制器（从 `NVML_NVLINK_FIRMWARE_UCODE_TYPE_MSE` 到 `..._NETIR_DLN`），无论 profile 按什么顺序列出，`nvidia-smi` 都按该顺序渲染。第六个无法表达，这是有意为之：`nvidia-smi` 遇到无法标注的 ucode 类型会放弃整个 `--info` 渲染。省略某个键就会省掉对应行；省略整个块则表格为空，`nvidia-smi` 渲染为 `Firmware Version: N/A`。不是三段无符号、以冒号分隔的数字的值会被丢弃并警告，而不会导致加载失败。`gb300` 自带上面的集合，读取自一块 GB300 NVL；没有其他 profile 声明它。
 
-The two remaining surfaces follow what the profile declares, so a board without
-the hardware declines instead of answering:
+其余两个接口面遵循 profile 的声明，因此没有相应硬件的单板会拒绝而不是应答：
 
-| Surface | Requirement |
+| 接口面 | 要求 |
 |---|---|
-| `nvlink -gLowPwrInfo`, `-sLowPwrThres` | A GPU with an active NVLink. The threshold is `1`-`1023`, or `0xFFFFFFFF` to restore the driver default |
-| the `NVLE:` and `Firmware Version:` rows of `nvlink --info` | Driver 580 or newer, on a board that has NVLink (`links_per_gpu`). Below 580 the function itself is absent, so `nvidia-smi` reports `Function Not Found` rather than an unsupported device. There is no architecture floor: a Hopper board prints the rows too, with NVLE off and no firmware |
+| `nvlink -gLowPwrInfo`、`-sLowPwrThres` | 具有活动 NVLink 的 GPU。阈值为 `1`-`1023`，或 `0xFFFFFFFF` 恢复驱动默认值 |
+| `nvlink --info` 的 `NVLE:` 与 `Firmware Version:` 行 | 驱动 580 或更新，且单板具有 NVLink（`links_per_gpu`）。低于 580 时函数本身不存在，因此 `nvidia-smi` 报告 `Function Not Found`，而不是设备不支持。没有架构下限：Hopper 板卡同样打印这些行，只是 NVLE 关闭且没有固件 |
 
-### NVSwitches
+### NVSwitch
 
-`switches:` lists the NVSwitches on the node. They are modelled as NVLink remote
-endpoints: declaring them (with `links_per_gpu > 0` and no explicit per-device
-`links:`) is what makes the engine fan each GPU's links across them, which is
-what `nvidia-smi topo -m` renders as `NV<links_per_gpu>` between every GPU pair.
-NVML offers no per-switch API, so the `nvmlUnit*` chassis calls stay stubbed, as
-they are on real DGX/HGX nodes.
+`switches:` 列出节点上的 NVSwitch。它们被建模为 NVLink 远端端点：声明它们（且 `links_per_gpu > 0`、没有显式的逐设备 `links:`）会让引擎把每块 GPU 的链路分散到各交换机上，这正是 `nvidia-smi topo -m` 在每对 GPU 之间渲染 `NV<links_per_gpu>` 的原因。NVML 没有提供逐交换机 API，因此 `nvmlUnit*` 机箱调用保持为桩实现，与真实 DGX/HGX 节点一样。
 
 ```yaml
 nvlink:
@@ -1149,56 +837,40 @@ nvlink:
       device_id: 0x22A310DE         # 10de:22a3 GH100 [H100 NVSwitch]
 ```
 
-`device_id` is the packed `(device << 16) | vendor` word, the same form
-`device_defaults.pci.device_id` takes for a GPU. It is optional, and it decides
-whether the node can see the switch over PCIe at all:
+`device_id` 是打包后的 `(device << 16) | vendor` 字，与 GPU 的 `device_defaults.pci.device_id` 采用相同形式。它是可选的，决定节点能否通过 PCIe 看到该交换机：
 
-| `device_id` | Meaning | Profiles |
+| `device_id` | 含义 | profile |
 |---|---|---|
-| set | Baseboard switch on the node's PCIe bus. Rendered into the PCI tree as a bridge, so `lspci` lists it beside the GPUs — see [NVSwitches on the PCI bus](helm-chart.md#nvswitches-on-the-pci-bus). | `a100`, `h100` |
-| unset | NVLink endpoint only. The node never enumerates it, which is how a rack-scale switch tray presents. | `gb200`, `gb300` |
+| 设置 | 节点 PCIe 总线上的基板交换机。渲染为 PCI 树中的桥接设备，因此 `lspci` 会把它与 GPU 一并列出——参见 [PCI 总线上的 NVSwitch](helm-chart.md#nvswitches-on-the-pci-bus) | `a100`、`h100` |
+| 未设置 | 仅作为 NVLink 端点。节点从不枚举它，这是机架级交换机托盘的呈现方式 | `gb200`、`gb300` |
 
-### NVLink error injection (per device)
+### NVLink 错误注入（逐设备）
 
-A device can be given a rising NVLink DL error rate on its switch links, so its
-uplinks report climbing replay/recovery/CRC errors — the GPU-side signal DCGM's
-`DCGM_HEALTH_WATCH_NVLINK` reads (→ `DCGM_FR_NVLINK_*`). Set it in a device
-override, or at runtime with [`nvml-mock-ctl nvlink-error`](nvml-mock-ctl.md#nvlink-error--inject-nvlink-dl-errors-on-switch-links):
+可以给设备在交换机链路上的 NVLink DL 错误率一个递增设置，使其上行链路报告不断攀升的 replay/recovery/CRC 错误——这是 DCGM 的 `DCGM_HEALTH_WATCH_NVLINK` 读取的 GPU 侧信号（→ `DCGM_FR_NVLINK_*`）。可在设备覆盖中设置，也可在运行时用 [`nvml-mock-ctl nvlink-error`](nvml-mock-ctl.md#nvlink-error--inject-nvlink-dl-errors-on-switch-links) 设置：
 
 ```yaml
 devices:
   - index: 0
     nvlink_error:
-      rate: 250        # errors/second added on top of the healthy baseline
-      links: [0, 1, 2] # optional; omit to inject on all active links
+      rate: 250        # 在健康基线之上每秒增加的错误数
+      links: [0, 1, 2] # 可选；省略则在所有活动链路上注入
 ```
 
-The count accrues monotonically off the shared counter epoch (same model as
-`nvlink.defaults.error_rate`); `rate: 0` (or omitting the block) is healthy. On
-a `615` or newer driver it shows only in the NVLink5 counter fields (see
-[NVLink telemetry on a 615 driver](#nvlink-telemetry-on-a-615-driver)). This
-is deliberately *not* an "NVSwitch entity health" knob — DCGM's NVSwitch/SXID
-health is NSCQ/kernel-log sourced and cannot be driven from a `libnvidia-ml.so`
-mock.
+计数从共享计数器纪元开始单调累加（与 `nvlink.defaults.error_rate` 模型相同）；`rate: 0`（或省略该块）表示健康。在 `615` 或更新驱动上，它只出现在 NVLink5 计数字段中（参见 [615 驱动上的 NVLink 遥测](#nvlink-telemetry-on-a-615-driver)）。这刻意*不是*"NVSwitch 实体健康"开关——DCGM 的 NVSwitch/SXID 健康来自 NSCQ/内核日志，无法由 `libnvidia-ml.so` mock 驱动。
 
-## Fabric Health
+## Fabric 健康
 
-`fabric:` describes the GPU's NVLink fabric attachment — the identity fields
-(`cluster_uuid`, `clique_id`, `state`) plus the health `nvidia-smi -q` renders
-under `Fabric` → `Health`. A `fabric:` block with no health keys means a healthy
-fabric, so the shipped Grace-Blackwell profiles report `Summary: Healthy` and
-`Bandwidth: Full` without configuring anything:
+`fabric:` 描述 GPU 的 NVLink fabric 连接——身份字段（`cluster_uuid`、`clique_id`、`state`）加上 `nvidia-smi -q` 在 `Fabric` → `Health` 下渲染的健康状态。不带健康键的 `fabric:` 块表示 fabric 健康，因此自带的 Grace-Blackwell profile 无需任何配置就报告 `Summary: Healthy` 和 `Bandwidth: Full`：
 
 ```yaml
 device_defaults:
   fabric:
     cluster_uuid: "00000000-0000-0000-0000-000000000001"
     clique_id: 0
-    state: "auto"      # couple registration to fake fabricmanager readiness
+    state: "auto"      # 把注册与模拟 fabricmanager 就绪状态关联
 ```
 
-Fault a single condition by naming it. Every other condition stays healthy, so a
-consumer sees exactly the fault you configured:
+只需点名某个状况即可让它故障。其他所有状况保持健康，因此消费者看到的正是你配置的那个故障：
 
 ```yaml
 devices:
@@ -1208,64 +880,48 @@ devices:
         route_unhealthy: true
 ```
 
-| `health:` key | `nvidia-smi -q` row | values |
+| `health:` 键 | `nvidia-smi -q` 行 | 取值 |
 | ------------- | ------------------- | ------ |
-| `degraded_bandwidth` | `Bandwidth` | `false` → `Full`, `true` → `Degraded` |
+| `degraded_bandwidth` | `Bandwidth` | `false` → `Full`，`true` → `Degraded` |
 | `route_recovery` | `Route Recovery in progress` | `false` / `true` |
 | `route_unhealthy` | `Route Unhealthy` | `false` / `true` |
 | `access_timeout_recovery` | `Access Timeout Recovery` | `false` / `true` |
-| `incorrect_configuration` | `Incorrect Configuration` | `none` (default), `no_partition`, `insufficient_nvlinks`, `incompatible_gpu_fw`, `invalid_location`, `incorrect_sysguid`, `incorrect_chassis_sn`, `gpu_state_invalid` |
+| `incorrect_configuration` | `Incorrect Configuration` | `none`（默认）、`no_partition`、`insufficient_nvlinks`、`incompatible_gpu_fw`、`invalid_location`、`incorrect_sysguid`、`incorrect_chassis_sn`、`gpu_state_invalid` |
 
-### Health summary
+### 健康摘要
 
-The `Summary` row is derived from the conditions above, so an injected fault
-moves it: all clear → `Healthy`, degraded bandwidth alone → `Limited Capacity`,
-any other fault → `Unhealthy`. Pin it with `health_summary` when you need a
-summary that disagrees with the conditions (a driver that reports a fault
-without classifying it, say):
+`Summary` 行由上述状况推导，因此注入故障会让它变化：全部正常 → `Healthy`，仅带宽降级 → `Limited Capacity`，其他任何故障 → `Unhealthy`。当你需要一个与状况不一致的摘要时（例如驱动报告了故障却未分类），可用 `health_summary` 固定它：
 
 ```yaml
 fabric:
   health_summary: "limited_capacity"   # healthy | unhealthy | limited_capacity
-                                       # | not_supported | auto (default)
+                                       # | not_supported | auto（默认）
 ```
 
-`not_supported` reproduces the pre-#677 rendering: `nvidia-smi` treats an
-unreported summary as "no health data" and prints `N/A` for the whole `Health`
-block.
+`not_supported` 复现 #677 之前的渲染：`nvidia-smi` 把未上报的摘要当作"没有健康数据"，整个 `Health` 块打印 `N/A`。
 
-### Raw `health_mask`
+### 原始 `health_mask`
 
-`health_mask` sets the NVML v2/v3 health bitmask directly, for encodings the
-`health:` keys cannot express. It replaces the derived mask wholesale, and the
-summary is derived from it:
+`health_mask` 直接设置 NVML v2/v3 健康位掩码，用于 `health:` 键无法表达的编码。它整体替换推导出的掩码，摘要再由它推导：
 
 ```yaml
 fabric:
-  health_mask: 0x1aa    # what `health:` with everything clear produces
+  health_mask: 0x1aa    # `health:` 全部正常时产生的值
 ```
 
-An explicit `health_mask: 0` means "the driver reported no health at all" and
-renders the whole block as `N/A` — that is why the shipped profiles no longer
-set it.
+显式的 `health_mask: 0` 表示"驱动完全没有上报健康状态"，会把整块渲染为 `N/A`——这就是自带 profile 不再设置它的原因。
 
 ### `Partition Assigned`
 
-The mock reports this field as `NOT_SUPPORTED`, which is what a real GB300 tray
-in a healthy rack reports (the driver does not answer it). Whether the row
-appears at all is up to the `nvidia-smi` build: 580.173.02 prints
-`Partition Assigned : N/A`, while the 580.65.06 binary the mock image runs for
-580 profiles has no such label and omits the row for every mask value.
+mock 把该字段报告为 `NOT_SUPPORTED`，这是健康机架中真实 GB300 托盘的表现（驱动不应答它）。该行是否出现取决于 `nvidia-smi` 的构建：580.173.02 打印 `Partition Assigned : N/A`，而 mock 镜像为 580 profile 运行的 580.65.06 二进制没有该标签，对所有掩码值都省略该行。
 
-Fabric health can also be degraded and restored at runtime with
-[`nvml-mock-ctl fabric-health`](nvml-mock-ctl.md#fabric-health--degrade-nvlink-fabric-health),
-without restarting the consumer.
+ Fabric 健康也可以在运行时用 [`nvml-mock-ctl fabric-health`](nvml-mock-ctl.md#fabric-health--degrade-nvlink-fabric-health) 降级和恢复，无需重启消费者。
 
-## Available GPU Profiles
+## 可用的 GPU profile
 
-Standalone configuration files are provided for each supported GPU model:
+每种支持的 GPU 型号都提供了独立配置文件：
 
-| File | GPU Model | Memory | Architecture |
+| 文件 | GPU 型号 | 显存 | 架构 |
 |------|-----------|--------|--------------|
 | `pkg/gpu/mocknvml/configs/mock-nvml-config-gb300.yaml` | NVIDIA GB300 NVL | 278 GiB | Blackwell Ultra |
 | `pkg/gpu/mocknvml/configs/mock-nvml-config-gb200.yaml` | NVIDIA GB200 NVL | 186 GiB | Blackwell |
@@ -1274,127 +930,73 @@ Standalone configuration files are provided for each supported GPU model:
 | `pkg/gpu/mocknvml/configs/mock-nvml-config-a100.yaml` | NVIDIA A100-SXM4-40GB | 40 GiB | Ampere |
 | `pkg/gpu/mocknvml/configs/mock-nvml-config-l40s.yaml` | NVIDIA L40S | 48 GiB | Ada Lovelace |
 | `pkg/gpu/mocknvml/configs/mock-nvml-config-t4.yaml` | NVIDIA T4 | 16 GiB | Turing |
-| `pkg/gpu/mocknvml/configs/mock-nvml-config-vrnvl72.yaml` | NVIDIA Graphics Device (Vera Rubin) | 280 GiB | Rubin |
+| `pkg/gpu/mocknvml/configs/mock-nvml-config-vrnvl72.yaml` | NVIDIA Graphics Device（Vera Rubin） | 280 GiB | Rubin |
 
-Each file contains a complete configuration with every device configured: 8 for
-the baseboard profiles, 4 for the rack-scale ones (`gb200`, `gb300`, `vrnvl72`),
-which model one compute tray, the unit a real node reports.
+每个文件都包含完整配置，并配置好所有设备：基板 profile 为 8 块 GPU，机架级 profile（`gb200`、`gb300`、`vrnvl72`）为 4 块——模拟一个计算托盘，即真实节点上报的单元。
 
-## Integration Values
+## 集成取值
 
-When deploying via Helm, additional values control integration with external projects:
+通过 Helm 部署时，还有额外取值控制与外部项目的集成：
 
-| Key | Default | Description |
+| 键 | 默认值 | 说明 |
 |-----|---------|-------------|
-| `integrations.fakeGpuOperator.enabled` | `false` | Create per-profile ConfigMaps named `gpu-profile-<profile>`, keyed `profile.yaml`, in the shape fake-gpu-operator's loader reads |
-| `integrations.fakeGpuOperator.targetNamespace` | `""` (release namespace) | Namespace for the profile ConfigMaps. Set to FGO's release namespace for FGO to find them; requires FGO's `builtinProfiles.enabled=false` |
-| `integrations.fakeGpuOperator.profileLabels` | `run.ai/gpu-profile: "true"` | Extra labels on profile ConfigMaps. The contract labels are always emitted |
+| `integrations.fakeGpuOperator.enabled` | `false` | 为每个 profile 创建名为 `gpu-profile-<profile>` 的 ConfigMap，键为 `profile.yaml`，格式遵循 fake-gpu-operator 加载器所读取的格式 |
+| `integrations.fakeGpuOperator.targetNamespace` | `""`（release 所在命名空间） | profile ConfigMap 所在命名空间。设为 FGO 的 release 命名空间以便 FGO 找到它们；要求 FGO 的 `builtinProfiles.enabled=false` |
+| `integrations.fakeGpuOperator.profileLabels` | `run.ai/gpu-profile: "true"` | profile ConfigMap 的额外标签。契约标签始终会生成 |
 
-See the [fake-gpu-operator guide](guides/runai-fgo/README.md) for setup details.
+设置细节参见 [fake-gpu-operator 指南](guides/runai-fgo/README.md)。
 
-## Metric Fidelity
+## 指标保真度
 
-Every value the mock reports comes from configuration, from a clock-driven
-simulator, or from a fixed derivation — never from real GPU work, because the
-mock never executes a kernel. This section states which is which, so a dashboard
-built against nvml-mock is read with the right expectations.
+mock 上报的每个值都来自配置、时钟驱动的模拟器或固定的推导——绝不来自真实 GPU 工作，因为 mock 从不执行 kernel。本节说明各自属于哪一种，以便基于 nvml-mock 构建的仪表盘能以正确的预期来解读。
+### 模拟值——调用之间会变化
 
-### Simulated — changes between calls
+驱动的依据是**经过时间，而非工作负载**：这些数值在完全空闲的节点上也会变化，在负载下也不会变化得更快。
 
-The driver is **elapsed time, not workload**: these numbers move on a completely
-idle node, and they do not move any faster under load.
+**所有自带 profile 的利用率都是实时的。** 每个 profile 都有自己的 `device_defaults.dynamic_metrics.utilization` 块——`pattern: steady`，GPU 10–45%，显存 5–25%——因此 `nvmlDeviceGetUtilizationRates` 以及 `DCGM_FI_DEV_GPU_UTIL` 在默认安装下绝不会报告恒定的 0。下限刻意高于 0，使"利用率有上报"成为确定性断言而非偶发断言。由于每个 `DCGM_FI_PROF_*` 活动指标都是 `utilization.gpu` 的固定比例（见下文的*刻意固定*），整个 profiling 接口面也因此非零。
 
-**Utilization is live in every shipped profile.** Each profile carries its own
-`device_defaults.dynamic_metrics.utilization` block — `pattern: steady`, GPU
-10–45%, memory 5–25% — so `nvmlDeviceGetUtilizationRates`, and therefore
-`DCGM_FI_DEV_GPU_UTIL`, never reports a constant 0 on a default install. The
-floor is deliberately above 0 so "utilization is reported" is a deterministic
-assertion rather than a flaky one. Because every `DCGM_FI_PROF_*` activity
-metric is a fixed fraction of `utilization.gpu` (see *Deliberately fixed*
-below), the whole profiling surface is non-zero as a consequence.
+温度和功耗保持**可选开启**：设置 `gpu.dynamicMetrics.enabled=true`（Helm）或在配置中添加 `dynamic_metrics.temperature` / `dynamic_metrics.power`。注意启用 Helm 覆盖会*整体替换* profile 的 `dynamic_metrics` 块为 chart 基线，其利用率默认是 `pattern: burst`，范围 0–100——该区间的空闲阶段确实会报告接近 0。如需下限，请固定 `gpu.dynamicMetrics.utilization.*`。
 
-Temperature and power stay **opt-in**: set `gpu.dynamicMetrics.enabled=true`
-(Helm) or add `dynamic_metrics.temperature` / `dynamic_metrics.power` to the
-config. Note that enabling the Helm overlay *replaces* the profile's
-`dynamic_metrics` block wholesale with the chart baseline, whose utilization
-default is `pattern: burst` across 0–100 — that band's idle phase does report
-near 0. Pin `gpu.dynamicMetrics.utilization.*` if you need a floor.
-
-| Metric | Config | Behaviour |
+| 指标 | 配置 | 行为 |
 |--------|--------|-----------|
-| `temperature.gpu` | `dynamic_metrics.temperature` | `base_c`, plus a sine ramp over `ramp_period_sec` bounded by `ramp_c`, plus uniform noise in ±`variance_c`; clamped to the thermal shutdown threshold when known |
-| `power.draw` | `dynamic_metrics.power` | `base_mw` ± `variance_mw`, clamped to `min_limit_mw` / `max_limit_mw` when those are set |
-| `utilization.gpu`, `utilization.memory` | `dynamic_metrics.utilization` | random within the configured band, shaped by `pattern` (`idle` / `busy` / `burst` / `steady`) |
-| NVLink throughput counters | — | accrue deterministically from a process-independent epoch (`MOCK_NVML_EPOCH`, else `/proc/stat` btime), so they grow monotonically across separate `nvidia-smi` runs |
+| `temperature.gpu` | `dynamic_metrics.temperature` | `base_c`，加上在 `ramp_period_sec` 内以 `ramp_c` 为界的正弦爬升，再加上 ±`variance_c` 的均匀噪声；已知时钳制到散热关机阈值 |
+| `power.draw` | `dynamic_metrics.power` | `base_mw` ± `variance_mw`；设置时钳制到 `min_limit_mw` / `max_limit_mw` |
+| `utilization.gpu`、`utilization.memory` | `dynamic_metrics.utilization` | 在配置区间内随机，形状由 `pattern`（`idle` / `busy` / `burst` / `steady`）决定 |
+| NVLink 吞吐计数器 | — | 从与进程无关的纪元（`MOCK_NVML_EPOCH`，否则 `/proc/stat` 的 btime）确定性累加，因此在不同 `nvidia-smi` 运行之间单调增长 |
 
-### Static — held until the config changes
+### 静态值——保持到配置改变
 
-Everything else resolved through the effective config: device memory
-(`memory.total_bytes` / `free_bytes` / `used_bytes` / `reserved_bytes`), ECC mode
-and counters, clocks, fan speed, performance state, power limits, `processes`,
-and failure injection. Each holds its configured value until the profile changes
-or `nvml-mock-ctl` writes a runtime override, which takes effect within one
-override TTL — see [nvml-mock-ctl](nvml-mock-ctl.md).
+其余一切通过有效配置解析：设备显存（`memory.total_bytes` / `free_bytes` / `used_bytes` / `reserved_bytes`）、ECC 模式与计数器、时钟、风扇转速、性能状态、功耗限制、`processes` 以及故障注入。每项保持其配置值，直到 profile 改变或 `nvml-mock-ctl` 写入运行时覆盖，后者在一个覆盖 TTL 内生效——参见 [nvml-mock-ctl](nvml-mock-ctl.md)。
 
-Three of these also accept writes from the consumer: the power management
-limit, persistence mode and clocks. Clock tuning (`nvidia-smi -ac`, `-lgc`,
-`-lmc`) works like the power limit below; see
-[Tuning clocks at runtime](#tuning-clocks-at-runtime).
+其中三项还接受消费者写入：功耗管理限值、persistence 模式和时钟。时钟调整（`nvidia-smi -ac`、`-lgc`、`-lmc`）与下面的功耗限值一样工作；参见[运行时调整时钟](#tuning-clocks-at-runtime)。
 
-The power management limit (`nvidia-smi -pl`, in milliwatts and inclusive of
-`min_limit_mw` / `max_limit_mw`; a cap outside those bounds is refused) is
-recorded in the runtime override document, so it behaves like the driver-level
-write it models: every process on the node reads the new cap, including ones
-started afterwards, and it holds until a reset clears it (`nvidia-smi -r`, or
-`nvml-mock-ctl reset`). A cap moves both the power management limit and the
-enforced limit, but not `default_limit_mw`. A mock with nowhere to record the
-write — no config, or an overrides file it cannot write — refuses the cap with
-`NVML_ERROR_NO_PERMISSION` rather than reporting a success that nothing would
-observe.
+功耗管理限值（`nvidia-smi -pl`，单位毫瓦，包含 `min_limit_mw` / `max_limit_mw`；超出边界的限值会被拒绝）记录在运行时覆盖文档中，因此它的行为与其建模的驱动级写入一致：节点上每个进程都会读到新限值，包括之后启动的进程，并保持到复位清除（`nvidia-smi -r` 或 `nvml-mock-ctl reset`）。设置限值会同时改变功耗管理限值和强制限值，但不会改变 `default_limit_mw`。如果 mock 无处记录写入——没有配置，或覆盖文件不可写——则拒绝该限值并返回 `NVML_ERROR_NO_PERMISSION`，而不是报告一个无人能观察到的成功。
 
-Persistence mode (`nvidia-smi -pm`) is recorded the same way, under the same
-reset and the same `NVML_ERROR_NO_PERMISSION` refusal. It matters beyond its own
-query: a GPU in persistence mode refuses to drain — see
-[Drain, removal and exclusion](#drain-removal-and-exclusion).
+persistence 模式（`nvidia-smi -pm`）以同样方式记录，遵循同样的复位和同样的 `NVML_ERROR_NO_PERMISSION` 拒绝。它的影响超出自身查询：处于 persistence 模式的 GPU 拒绝排空——参见[排空、移除与排除](#drain-removal-and-exclusion)。
 
-### Workload power profiles
+### 工作负载功耗 profile
 
-`power.workload_power_profiles` opts a device into the Blackwell workload power
-profile feature, which `nvidia-smi power-profiles` reads and writes. Absent — the
-default — the device declines the feature the way every pre-Blackwell board does.
-`requested` seeds the set a consumer sees until one of the setters overrides it:
+`power.workload_power_profiles` 让设备选择加入 Blackwell 工作负载功耗 profile 功能，`nvidia-smi power-profiles` 可读写该功能。默认不设置，此时设备像所有 Blackwell 之前的板卡一样拒绝该功能。`requested` 用于预置消费者看到的集合，直到某个 setter 覆盖它：
 
 ```yaml
 power:
   workload_power_profiles:
     supported:
-      - id: 0                  # NVML_POWER_PROFILE_MAX_P, rendered "Max-P"
-        priority: 10           # lower value wins arbitration
-        conflicts: [1, 5]      # cannot be enforced alongside these
+      - id: 0                  # NVML_POWER_PROFILE_MAX_P，渲染为 "Max-P"
+        priority: 10           # 数值越小，仲裁优先级越高
+        conflicts: [1, 5]      # 不能与这些 profile 同时生效
       - id: 6                  # "LLM Inference"
         priority: 40
-    requested: []              # profile ids to ask for
+    requested: []              # 要请求的 profile ID
 ```
 
-`id` is an `NVML_POWER_PROFILE_*` index (0-254) and doubles as the profile's bit
-position in NVML's 255-bit masks, so ids must be unique. It is also what
-nvidia-smi renders as the name: `-l` lists the supported set, `-ld` adds the
-priority and conflicts, `-gr` and `-ge` report the requested and enforced sets,
-and `-sr` / `-cr` add to and remove from the requested set.
+`id` 是 `NVML_POWER_PROFILE_*` 索引（0-254），同时作为该 profile 在 NVML 255 位掩码中的位位置，因此 ID 必须唯一。它也是 nvidia-smi 渲染的名称：`-l` 列出支持的集合，`-ld` 附加优先级和冲突，`-gr` 与 `-ge` 报告请求的集合和生效的集合，`-sr` / `-cr` 向请求集合添加和移除。
 
-Requested and enforced differ because asking for mutually exclusive profiles is
-allowed: enforced is what survives arbitration, dropping any profile that
-conflicts with a higher-priority one that was also requested. A requested id the
-device does not advertise is ignored in config, but refused with
-`NVML_ERROR_INVALID_ARGUMENT` when a consumer asks for it at runtime.
+请求与生效不同，因为允许请求互斥的 profile：生效集合是仲裁后保留下来的部分，会丢弃与同样被请求的更高优先级 profile 冲突的那些。设备未通告的请求 ID 在配置中会被忽略，但消费者在运行时请求它时会被拒绝并返回 `NVML_ERROR_INVALID_ARGUMENT`。
 
-`requested` is empty in the shipped profiles, because every real GB200, GB300 and
-B200 capture reports no requested or enforced profile — which is what
-`nvidia-smi -q -x` renders as `N/A` in its `<power_profiles>` block.
+自带 profile 的 `requested` 为空，因为每一次真实的 GB200、GB300 和 B200 采集都报告没有请求或生效的 profile——这正是 `nvidia-smi -q -x` 在其 `<power_profiles>` 块中渲染为 `N/A` 的情况。
 
-A write outranks `requested` from the moment it lands, and like `nvidia-smi -pl`
-it is recorded in the runtime override document rather than in the writing
-process — so a later `nvidia-smi` reads it back, and it holds until a reset:
+写入从落地那一刻起优先级高于 `requested`，并且与 `nvidia-smi -pl` 一样记录在运行时覆盖文档而非写入进程中——因此后面的 `nvidia-smi` 会读回它，并保持到复位：
 
 ```console
 $ nvidia-smi power-profiles -sr 2 -i 0
@@ -1403,8 +1005,7 @@ $ nvidia-smi power-profiles -gr -i 0
 2. Compute
 ```
 
-Within a single invocation only `-ge` reflects a write, because nvidia-smi
-evaluates `-sr` and `-cr` before `-ge` but after `-gr`:
+在单次调用中只有 `-ge` 能反映写入，因为 nvidia-smi 先计算 `-sr` 和 `-cr`，再计算 `-ge`，但在 `-gr` 之后：
 
 ```console
 $ nvidia-smi power-profiles -sr 0,2 -cr 0 -ge -i 0
@@ -1413,54 +1014,31 @@ Successfully cleared the requested profiles.
 2. Compute
 ```
 
-Because the request persists, a consumer that wants the board back at its
-configured state has to clear what it asked for, or reset the device. Two further nvidia-smi
-behaviours are worth knowing, neither of them the mock's: it refuses an id the
-board does not advertise before calling NVML at all, and it applies a
-comma-separated list in full only to the first GPU it visits, passing just the
-first profile to the rest.
+由于请求会持久化，想让板卡回到配置状态的消费者必须清除自己的请求，或复位设备。还有两个 nvidia-smi 行为值得了解，两者都不是 mock 造成的：它会在调用 NVML 之前拒绝板卡未通告的 ID；对于逗号分隔的列表，它只对访问的第一块 GPU 完整应用，其余 GPU 只收到第一个 profile。
 
-Two axes decide whether the feature answers at all, and they fail differently. A
-device that declares no `workload_power_profiles` reports the feature as
-unsupported; one whose `system.driver_version` is older than 570 does not export
-the symbols, so nvidia-smi cannot find the function. Of the shipped profiles only
-`gb200` and `gb300` satisfy both; the others run a new enough driver but declare
-no profiles.
+有两个维度决定该功能是否应答，且失败方式不同。未声明 `workload_power_profiles` 的设备把该功能报告为不支持；`system.driver_version` 早于 570 的设备不导出相应符号，因此 nvidia-smi 找不到该函数。自带 profile 中只有 `gb200` 和 `gb300` 同时满足两者；其他 profile 运行的驱动足够新，但未声明任何 profile。
 
-### Power smoothing
+### 功耗平滑
 
-Power smoothing is the Blackwell feature that holds a GPU's power draw above a
-floor so that load swings do not ripple back into the facility's supply. It
-renders as the "Power Smoothing" block of `nvidia-smi -q` and is driven by
-`nvidia-smi power-smoothing`. Blackwell and later devices support it by default,
-which on the shipped profiles means `b200`, `gb200` and `gb300`; earlier
-architectures report it as `N/A`. It also needs a `system.driver_version` of 570
-or later: an older driver reports none of the power smoothing fields and lacks the
-setters. `power.smoothing` seeds its state:
+功耗平滑是 Blackwell 的一项功能，把 GPU 功耗维持在某个下限之上，使负载波动不会传导回机房供电。它渲染为 `nvidia-smi -q` 的 "Power Smoothing" 块，由 `nvidia-smi power-smoothing` 驱动。Blackwell 及之后设备默认支持它，在自带 profile 中即 `b200`、`gb200` 和 `gb300`；更早架构报告为 `N/A`。它还要求 `system.driver_version` 为 570 或更新：更旧的驱动不报告任何功耗平滑字段，也没有 setter。`power.smoothing` 用于预置其状态：
 
 ```yaml
 power:
   smoothing:
-    supported: true                    # override the architecture default
-    state: "enabled"                   # default "disabled"
-    active_profile: 1                  # preset 0-4, default 0
+    supported: true                    # 覆盖架构默认值
+    state: "enabled"                   # 默认 "disabled"
+    active_profile: 1                  # 预设 0-4，默认 0
     profiles:
       1:
-        percent_tmp_floor: 65.5        # floor as % of the power ceiling, 0-100
-        ramp_up_rate_mw_per_s: 30000   # rendered as 30.00 W/s
+        percent_tmp_floor: 65.5        # 下限占功耗上限的百分比，0-100
+        ramp_up_rate_mw_per_s: 30000   # 渲染为 30.00 W/s
         ramp_down_rate_mw_per_s: 15000
         ramp_down_hysteresis_ms: 250
 ```
 
-The device has five preset profiles, numbered 0 to 4. A preset the config does
-not list reads as all zeros. The power ceiling ("Current TMP") is the enforced
-power limit, so it follows `nvidia-smi -pl`. While smoothing is enabled, the floor
-is that ceiling times the active preset's `percent_tmp_floor`. Disabled, the floor
-is 0 W. Smoothing does not change the simulated power draw.
+设备有五个预设 profile，编号 0 到 4。配置未列出的预设读作全零。功耗上限（"Current TMP"）就是强制功耗限制，因此跟随 `nvidia-smi -pl`。启用平滑时，下限为该上限乘以当前预设的 `percent_tmp_floor`；禁用时下限为 0 W。平滑不会改变模拟的功耗值。
 
-`-s`, `-spp`, `-ptf`, `-rur`, `-rdr` and `-rdh` are recorded in the runtime
-override document like `nvidia-smi -pl`, so a later `nvidia-smi` reads them back
-and they hold until a reset:
+`-s`、`-spp`、`-ptf`、`-rur`、`-rdr` 和 `-rdh` 与 `nvidia-smi -pl` 一样记录在运行时覆盖文档中，因此后面的 `nvidia-smi` 会读回它们，并保持到复位：
 
 ```console
 $ nvidia-smi power-smoothing -i 0 -s 1
@@ -1476,29 +1054,16 @@ $ nvidia-smi -i 0 -q | grep -A3 "Current Profile"
             Ramp Down Rate                : 0.00 W/s
 ```
 
-A preset outside 0-4, a floor outside 0-100 %, a negative ramp rate or a
-fractional hysteresis is refused with `NVML_ERROR_INVALID_ARGUMENT`. Admin
-overrides are not modelled and read `Not Set`; the privilege level reads `N/A`,
-immediate ramp-down `Disabled`, and the remaining hardware lifetime 100 %.
+超出 0-4 的预设、超出 0-100 % 的下限、负的爬升速率或非整数的迟滞都会被拒绝并返回 `NVML_ERROR_INVALID_ARGUMENT`。管理员覆盖未建模，读作 `Not Set`；权限级别读作 `N/A`，立即降功耗为 `Disabled`，剩余硬件寿命为 100 %。
 
 !!! note
-    Captures from real B200, GB200 and GB300 nodes render the whole block as
-    `Insufficient Permissions`. The mock does not model NVML privileges, so it
-    always renders the full block.
+    来自真实 B200、GB200 和 GB300 节点的采集会把整块渲染为 `Insufficient Permissions`。mock 不建模 NVML 权限，因此始终渲染完整块。
 
-Like workload power profiles, the feature also needs `system.driver_version` 570
-or later; an older driver does not export the symbols.
+与工作负载功耗 profile 一样，该功能也要求 `system.driver_version` 为 570 或更新；更旧的驱动不导出这些符号。
 
-### PowerMizer mode and power source
+### PowerMizer 模式与电源
 
-`power.power_mizer_mode` sets the mode `nvmlDeviceGetPowerMizerMode_v1` reports:
-`adaptive`, `prefer_maximum_performance`, `auto` (the default) or
-`prefer_consistent_performance`. Earlier than Maxwell, both calls decline.
-`power.supported_power_mizer_modes` lists the modes the device accepts, by the
-same names; it becomes the `supportedPowerMizerModes` mask. Left out, empty, or
-naming no NVML mode, all four are supported. Names NVML does not define are
-ignored, with a warning. The `vrnvl72` profile lists `adaptive`, `prefer_maximum_performance`
-and `auto`, which is the mask of 7 the real tray reports.
+`power.power_mizer_mode` 设置 `nvmlDeviceGetPowerMizerMode_v1` 报告的模式：`adaptive`、`prefer_maximum_performance`、`auto`（默认）或 `prefer_consistent_performance`。Maxwell 之前两个调用都拒绝。`power.supported_power_mizer_modes` 以相同名称列出设备接受的模式；它会成为 `supportedPowerMizerModes` 掩码。省略、为空或未指向任何 NVML 模式时，四种模式都支持。NVML 未定义的名称会被忽略并警告。`vrnvl72` profile 列出 `adaptive`、`prefer_maximum_performance` 和 `auto`，对应真实托盘上报的掩码 7。
 
 ```yaml
 power:
@@ -1506,147 +1071,84 @@ power:
   supported_power_mizer_modes: ["adaptive", "prefer_maximum_performance", "auto"]
 ```
 
-`nvmlDeviceSetPowerMizerMode_v1` writes the mode to the runtime override
-document, so other processes read it back. It refuses a mode the device does
-not list with `NVML_ERROR_INVALID_ARGUMENT`, as it does an undefined mode.
-Both entry points need `system.driver_version` 580 or later. nvidia-smi 580 does
-not show this mode, so only an NVML consumer observes it.
+`nvmlDeviceSetPowerMizerMode_v1` 把模式写入运行时覆盖文档，因此其他进程能读回。它拒绝设备未列出的模式，返回 `NVML_ERROR_INVALID_ARGUMENT`，未定义的模式同理。两个入口点都要求 `system.driver_version` 为 580 或更新。nvidia-smi 580 不显示该模式，因此只有 NVML 消费者能观察到。
 
-`nvmlDeviceGetPowerSource` reports AC power on every device.
+`nvmlDeviceGetPowerSource` 在所有设备上报告交流供电。
 
-### Deliberately fixed
+### 刻意固定
 
-**Profiling metrics (`DCGM_FI_PROF_*`).** DCGM reads these on Hopper+ through the
-NVML GPM API. The mock derives every activity metric as a fixed fraction of
-`utilization.gpu`:
+**Profiling 指标（`DCGM_FI_PROF_*`）。** DCGM 在 Hopper 及之后通过 NVML GPM API 读取这些指标。mock 把每个活动指标都推导为 `utilization.gpu` 的固定比例：
 
-| GPM metric | Fraction of `utilization.gpu` |
+| GPM 指标 | `utilization.gpu` 的比例 |
 |------------|-------------------------------|
-| SM utilization, graphics utilization | 1.00 |
-| SM occupancy | 0.75 |
-| Any-tensor activity | 0.50 |
-| HMMA (FP16 tensor) | 0.40 |
+| SM 利用率、图形利用率 | 1.00 |
+| SM 占用率 | 0.75 |
+| 任意 tensor 活动 | 0.50 |
+| HMMA（FP16 tensor） | 0.40 |
 | FP16 | 0.35 |
 | FP32 | 0.25 |
-| Integer | 0.10 |
-| FP64, DMMA, IMMA | 0.05 |
+| 整数 | 0.10 |
+| FP64、DMMA、IMMA | 0.05 |
 | DFMA | 0.02 |
 
-DRAM bandwidth activity mirrors `utilization.memory`, and PCIe / NVLink
-throughput come from the counter snapshots. The fractions approximate the shape
-of a tensor-dominated Hopper training step; they are **intentionally not** tied to
-execution. SM occupancy and tensor-core activity are properties of kernels the
-mock does not run, so deriving them from anything other than the configured
-utilization would be fabrication rather than simulation. They stay fixed by
-design and are not a gap to be closed.
+DRAM 带宽活动镜像 `utilization.memory`，PCIe / NVLink 吞吐来自计数器快照。这些比例近似于以 tensor 为主的 Hopper 训练步骤的形状；它们**刻意与实际执行脱钩**。SM 占用率和 tensor core 活动是 mock 不运行的 kernel 的属性，因此从配置利用率以外的任何东西推导它们都是捏造而非模拟。它们按设计保持固定，不是待填补的空白。
 
-With MIG enabled, a GPU instance can be sampled by its ID
-(`nvmlGpmMigSampleGet`) or through one of its MIG device handles
-(`nvmlGpmSampleGet`); both answer the same. The mock spreads the board's load
-evenly across its slices, so every GPU instance reports the board's activity
-percentages, while PCIe and NVLink throughput are its slice share of the
-board's: a `1g` instance on a seven-slice board reports one seventh of the
-board's PCIe rate.
+启用 MIG 时，GPU 实例可通过其 ID（`nvmlGpmMigSampleGet`）或某个 MIG 设备句柄（`nvmlGpmSampleGet`）采样；两者应答相同。mock 把板卡负载均匀分摊到各分片，因此每个 GPU 实例都报告板卡的活动百分比，而 PCIe 和 NVLink 吞吐则是其分片占板卡的比例：七分片板卡上的 `1g` 实例报告板卡 PCIe 速率的七分之一。
 
-**Conf Compute protected memory.** The `Conf Compute Protected Memory Usage`
-block of `nvidia-smi -q` reports `0 MiB` for Total, Used and Free on every
-profile, and there is no key to change it. Nothing partitions protected memory
-until Confidential Compute mode is switched on, which the mock does not model
-(see issue #377), and NVML reports `0 MiB` rather than an unsupported query
-whether or not the part could do CC: every board in
-`tests/e2e/go/assertions/nvidiasmi/testdata/hardware` reports it that way,
-including A100, L40S and T4. A profile pinned to a driver older than `525` is the
-one exception — the CC APIs did not exist yet, so the rows read `N/A`, as they do
-on real hardware of that vintage.
+**机密计算受保护内存。** `nvidia-smi -q` 的 `Conf Compute Protected Memory Usage` 块在所有 profile 上 Total、Used 和 Free 都报告 `0 MiB`，没有配置键可改变它。在机密计算模式开启之前，没有任何东西会划分受保护内存，而 mock 不建模该模式（见 issue #377）；无论芯片是否支持 CC，NVML 都报告 `0 MiB` 而不是不支持的查询：`tests/e2e/go/assertions/nvidiasmi/testdata/hardware` 中每块板卡都这样报告，包括 A100、L40S 和 T4。唯一例外是固定到早于 `525` 驱动的 profile——当时 CC API 还不存在，因此这些行读作 `N/A`，与那个年代的硬件一致。
 
-**Board diagnostics.** No key changes these answers. Wherever `nvidia-smi -q`
-renders one, it matches the hardware captures of a freshly loaded driver:
+**板卡诊断。** 没有配置键能改变这些应答。`nvidia-smi -q` 渲染它们的任何地方，都与刚加载驱动的硬件采集一致：
 
-| Query | Answer |
+| 查询 | 应答 |
 |-------|--------|
-| Bus type | PCIe, on every profile including Grace boards |
-| EGM (`capabilities` block) | `disabled` |
-| Clock monitor | No faults, on Ampere and newer |
-| InfoROM BBX flush | `N/A`: not flushed yet during this driver run |
-| Bridge chips, IRQ number, PRM registers | Not supported |
+| 总线类型 | PCIe，在所有 profile 上都是，包括 Grace 板卡 |
+| EGM（`capabilities` 块） | `disabled` |
+| 时钟监控 | 无故障，Ampere 及之后 |
+| InfoROM BBX 刷新 | `N/A`：本次驱动运行尚未刷新 |
+| 桥接芯片、IRQ 号、PRM 寄存器 | 不支持 |
 
-**Sample buffers.** `nvmlDeviceGetSamples` reports 20 samples one second
-apart, and every one of them carries the current reading of the matching
-getter: power draw, GPU and memory utilization, the graphics and memory clocks,
-and encoder, decoder, JPEG and OFA utilization. The mock keeps no history, so
-the minimum, maximum and average over the window all equal the current value,
-even under [dynamic metrics](#simulated-changes-between-calls). Timestamps
-sit on a fixed one-second grid, so a poller that passes back the last
-timestamp it saw gets only the samples taken since, and `NVML_ERROR_NOT_FOUND`
-when there are none. On a GPU with MIG enabled, the GPU, memory, encoder and
-decoder utilization samples are not supported. Module power samples are not
-supported on any profile.
+**采样缓冲区。** `nvmlDeviceGetSamples` 报告 20 个相隔一秒的样本，每个样本都携带对应 getter 的当前读数：功耗、GPU 与显存利用率、graphics 与显存时钟，以及编码器、解码器、JPEG 和 OFA 利用率。mock 不保留历史，因此窗口内的最小值、最大值和平均值都等于当前值，即便在[动态指标](#simulated-changes-between-calls)下也是如此。时间戳位于固定的一秒网格上，因此把上次看到的时间戳传回来的轮询者只会得到此后采集的样本，没有则得到 `NVML_ERROR_NOT_FOUND`。在启用 MIG 的 GPU 上，GPU、显存、编码器和解码器利用率样本不支持。任何 profile 上都不支持单元功耗样本。
 
-**Identity and topology.** Device `name`, `architecture`, `brand`,
-`compute_capability`, `uuid`, PCI `bus_id`, and the BAR1 aperture
-(`bar1_memory`) are baked onto the device at construction and need a pod restart
-to change.
+**身份与拓扑。** 设备 `name`、`architecture`、`brand`、`compute_capability`、`uuid`、PCI `bus_id` 和 BAR1 窗口（`bar1_memory`）在设备构造时就固定下来，需要重启 Pod 才能改变。
 
-### Allocation-aware — opt in
+### 感知分配——可选开启
 
-`memory.used_bytes` and `memory.free_bytes` follow Kubernetes GPU allocation
-when `allocationWatcher.enabled=true`. A sidecar in the nvml-mock DaemonSet
-polls the kubelet pod-resources API and writes the same runtime override file
-`nvml-mock-ctl` writes, which the engine re-reads within one override TTL.
-Scheduling a pod that claims a GPU moves that GPU's number; deleting the pod
-returns it.
+当 `allocationWatcher.enabled=true` 时，`memory.used_bytes` 和 `memory.free_bytes` 会跟随 Kubernetes GPU 分配。nvml-mock DaemonSet 中的一个 sidecar 轮询 kubelet pod-resources API，并写入与 `nvml-mock-ctl` 相同的运行时覆盖文件，引擎在一个覆盖 TTL 内重新读取。调度一个申请 GPU 的 Pod 会改变该 GPU 的数字；删除 Pod 则恢复。
 
-| Value | Behaviour |
+| 取值 | 行为 |
 |-------|-----------|
-| `allocationWatcher.usedFractionPerClaim` | Share of the usable aperture (`total - reserved`) attributed per claim. Default `0.5` |
-| Time-sliced GPUs | Each holding container is a separate claim; claims on one device add up and clamp at the aperture |
-| Unclaimed GPUs | Report `used_bytes: 0` and the profile's idle `free_bytes` |
+| `allocationWatcher.usedFractionPerClaim` | 每次申请分摊的可用窗口份额（`total - reserved`）。默认 `0.5` |
+| 时间切分 GPU | 每个持有容器是一次独立申请；同一设备上的申请会累加并在窗口处钳制 |
+| 未申请的 GPU | 报告 `used_bytes: 0` 和 profile 的空闲 `free_bytes` |
 
-The reported bytes are **synthetic**. The mock runs no kernel and allocates no
-device memory, so the number says a claim *exists* — not what a workload
-touched. It reads per device: a claim on GPU 3 moves GPU 3 only.
+上报的字节数是**合成的**。mock 不运行 kernel，也不分配设备显存，因此该数字只表示*存在*一次申请——而不是工作负载碰过什么。它逐设备读取：GPU 3 上的申请只影响 GPU 3。
 
-The design is level-triggered. Each poll recomputes every device from the full
-current allocation, so a missed event self-heals on the next tick rather than
-leaving a GPU pinned at a stale value. A failed poll publishes nothing and keeps
-the previous reading, because publishing zeros on a transient kubelet error
-would report the whole node idle.
+该设计是电平触发的。每次轮询都根据当前完整分配重新计算每台设备，因此漏掉的事件会在下一个周期自愈，而不会让 GPU 卡在旧值上。失败的轮询不发布任何内容，保留之前的读数，因为瞬时 kubelet 错误时发布零会把整个节点报告为空闲。
 
-While the watcher runs it **owns** those two fields: an `nvml-mock-ctl set --gpu
-N memory.used_bytes=…` is overwritten on the next poll. Every other field
-`nvml-mock-ctl` writes is preserved — both writers take the same lock.
+监视器运行时**拥有**这两个字段：`nvml-mock-ctl set --gpu N memory.used_bytes=…` 会在下次轮询时被覆盖。`nvml-mock-ctl` 写入的其他字段都会保留——两个写入方使用同一把锁。
 
-Off by default, because enabling it mounts the kubelet pod-resources socket
-(read-only, node-local; no RBAC, since it is not the API server).
+默认关闭，因为启用它会挂载 kubelet pod-resources socket（只读，节点本地；无需 RBAC，因为它不是 API server）。
 
-### Still not workload-aware — known gap
+### 仍不感知工作负载——已知空白
 
-`processes` stays empty regardless of allocation, so `nvidia-smi` reports no
-running processes even on a claimed GPU. Tracked in
-[#506](https://github.com/NVIDIA/k8s-test-infra/issues/506) item 2.
+`processes` 始终为空，无论是否分配，因此即便 GPU 已被申请，`nvidia-smi` 也不报告运行中进程。跟踪于 [#506](https://github.com/NVIDIA/k8s-test-infra/issues/506) 第 2 项。
 
-Read the *Simulated* section carefully here too: `utilization.gpu` is no longer
-a constant 0, but it is **not** evidence of work either. It moves on elapsed
-time. A busy-looking utilization on an idle node is exactly what that block
-produces, by design.
+这里也要仔细阅读*模拟值*一节：`utilization.gpu` 不再是恒定 0，但它同样**不是**工作证据。它按经过时间变化。空闲节点上看起来忙碌的利用率正是该块按设计产生的结果。
 
-What each container *can see* has always been allocation-aware, and is a
-separate thing from what the values say: the engine filters its visible GPU set
-by which `/dev/nvidia*` nodes are present, so a pod allocated one GPU on an
-eight-GPU node sees exactly one in `nvidia-smi -L`.
+每个容器*能看到*什么一直都是感知分配的，这与数值的含义是两回事：引擎按存在哪些 `/dev/nvidia*` 节点过滤其可见 GPU 集合，因此在八 GPU 节点上分配到一块 GPU 的 Pod，在 `nvidia-smi -L` 中恰好看到一块。
 
-To move any of these explicitly, use `nvml-mock-ctl set`.
+要显式改动其中任何一项，请使用 `nvml-mock-ctl set`。
 
-## Validation
+## 校验
 
-The configuration is validated on load:
+配置在加载时会进行校验：
 
-- `version` field is required
-- `system.driver_version` is required
-- Device indices must be unique
-- Invalid YAML syntax causes fallback to defaults
+- `version` 字段必需
+- `system.driver_version` 必需
+- 设备索引必须唯一
+- YAML 语法无效时会回退到默认值
 
-Enable debug mode to see validation errors:
+开启调试模式可查看校验错误：
 
 ```bash
 MOCK_NVML_DEBUG=1 LD_LIBRARY_PATH=. nvidia-smi

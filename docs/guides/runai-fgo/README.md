@@ -75,10 +75,10 @@ helm install nvml-mock oci://ghcr.io/nvidia/k8s-test-infra/chart/nvml-mock \
   --wait --timeout 120s
 ```
 
-`integrations.fakeGpuOperator.enabled=true` 负责按 FGO 加载器能读懂的格式生成 profile ConfigMap
+`integrations.fakeGpuOperator.enabled=true` 负责按 FGO 加载器能读懂的格式生成 profile ConfigMap；`targetNamespace` 把它们放到 FGO 会去读的位置——不设的话，ConfigMap 会落在 Mokka 自己的 release 命名空间里，而 FGO 根本不看那里。
 
 !!! note "国内镜像拉取"
-    本指南会从 `ghcr.io`（nvml-mock、fake-gpu-operator）拉取镜像。若这些镜像源拉取缓慢或超时，可给相关 chart 的镜像加私有仓库前缀（如给 `nvml-mock` 加 `--set global.imageRegistry=harbor.heilansc.com/ghcr.io`）。具体做法与示例见[国内镜像加速](../README.md#domestic-mirror)。；`targetNamespace` 把它们放到 FGO 会去读的位置——不设的话，ConfigMap 会落在 Mokka 自己的 release 命名空间里，而 FGO 根本不看那里。
+    本指南会从 `ghcr.io`（nvml-mock、fake-gpu-operator）拉取镜像。若这些镜像源拉取缓慢或超时，可给相关 chart 的镜像加私有仓库前缀（如给 `nvml-mock` 加 `--set global.imageRegistry=harbor.heilansc.com/ghcr.io`）。具体做法与示例见[国内镜像加速](../README.md#domestic-mirror)。
 
 ## 第 3 步 — 在 scale 节点池安装 FGO
 
@@ -102,7 +102,7 @@ topology:
 EOF
 ```
 
-`backend: mock` 表示这个节点池交给 Mokka，`backend: fake` 表示继续用 FGO 自带的垫片。如今这 8 个 ConfigMap 名字已归 Mokka 所有，只有加上 `builtinProfiles.enabled=false` 这次安装才装得上，参见[发现契约](#the-discovery-contract)。
+`backend: mock` 表示这个节点池交给 Mokka，`backend: fake` 表示继续用 FGO 自带的 shim。如今这 8 个 ConfigMap 名字已归 Mokka 所有，只有加上 `builtinProfiles.enabled=false` 这次安装才装得上，参见[发现契约](#the-discovery-contract)。
 
 ## 第 4 步 — 验证
 
@@ -172,5 +172,5 @@ kind delete cluster --name nvml-mock-fgo-demo
 | 想了解 | 参见 |
 |---|---|
 | 全部 chart 配置项 | [安装](../../helm-chart.md) |
-| 一个配置档定义了什么 | [配置](../../configuration.md) |
+| 一个 profile 定义了什么 | [配置](../../configuration.md) |
 | 单独使用 Mokka | [快速入门](../../quickstart.md) |

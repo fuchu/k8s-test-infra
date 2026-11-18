@@ -1,16 +1,16 @@
 # nvml-mock 故障注入演示
 
-这是一篇端到端演练，会在你当前 context 指向的集群上跑一遍 GPU 故障注入功能。它通过 `helm upgrade --reuse-values` 在各个场景之间重新部署 chart，依次走遍所有支持的故障模式（`healthy` → `ecc_uncorrectable` → `lost` → `fallen_off_bus`），并针对 Pod 内的 `nvidia-smi` 输出，逐一断言每种模式的预期表现。
+这是一篇端到端演练，会在你当前 context 指向的集群上跑一遍 GPU 故障注入功能。它通过 `helm upgrade --reuse-values` 在各个场景之间重新部署 chart，依次走遍所有支持的故障模式（`healthy` → `ecc_uncorrectable` → `lost` → `fallen_off_bus`）。脚本针对 Pod 内的 `nvidia-smi` 输出，逐一断言每种模式的预期表现。
 
 设置 `BUILD_LOCAL=true` 时，演示会创建自己专属的集群 `nvml-mock-failure-demo`，这也是唯一能把它与其他 Mokka release 完全隔离的方式。
 
 默认路径则直接使用你当前指向的集群：它会把名为 `nvml-mock-failure` 的 release 装进独立命名空间 `mokka-failure`（可用 `NAMESPACE=...` 覆盖）。这两个名字都区别于快速入门里的 `nvml-mock` / `mokka`，因此两套安装不会误把对方的对象当成自己的。
 
-> **不要把 `NAMESPACE=` 指向另一个 Mokka release 的命名空间。** 如果那里已经有别的 Mokka release，演示会拒绝安装并以 `4` 退出。之所以硬性拒绝，是因为**无论命名空间叫什么，两个 release 都共享同一份节点级宿主机状态**。两者的 DaemonSet 都挂载同样的 hostPath：`/var/lib/nvml-mock`、`/var/run/cdi`、`/run/nvidia` 以及 NFD 特性目录，而这些路径都不按 release 或命名空间做隔离。
+> **不要把 `NAMESPACE=` 指向另一个 Mokka release 的命名空间。** 如果那里已经有别的 Mokka release，演示会拒绝安装并以 `4` 退出。这里必须硬性拒绝：**无论命名空间叫什么，两个 release 都共享同一份节点级宿主机状态**。两者的 DaemonSet 都挂载同样的 hostPath：`/var/lib/nvml-mock`、`/var/run/cdi`、`/run/nvidia` 以及 NFD 特性目录，而这些路径都不按 release 或命名空间做隔离。
 >
 > 在真实集群上实测过：把两个 release 放在一起跑过一轮后，唯一的共享文件 `/var/lib/nvml-mock/driver/config/config.yaml`（CDI 规格 `/var/run/cdi/nvidia.yaml` 用 `MOCK_NVML_CONFIG` 指向它）被留成了 `failure: {after_calls: 1, mode: fallen_off_bus, code: 79}`。
 >
-> 两个演示自己的 Pod 察觉不到，因为它们各自挂载自己的 ConfigMap。**但任何调度到这些节点上的真实 GPU 工作负载都会受影响**：它会不知不觉读到这份注入了故障的配置——而这恰恰是这个模拟层应当如实提供的行为。发生这种情况时，两个演示仍然都退出 `0`，所以这里必须是硬性终止，而不是给个警告。
+> 两个演示各自的 Pod 都察觉不到异常，因为它们挂载的是各自的 ConfigMap。**但任何调度到这些节点上的真实 GPU 工作负载都会受影响**：它会不知不觉读到这份注入了故障的配置——而这恰恰是这个模拟层应当如实提供的行为。发生这种情况时，两个演示仍然都退出 `0`，所以这里必须是硬性终止，而不是给个警告。
 >
 > `DEMO_ASSUME_YES=true` 可以绕过这个检查。一旦用了它，请在单独重装其中一个演示之前，把受影响的节点视为「已污染」。
 
@@ -66,20 +66,20 @@ HELM_TIMEOUT=30m ./run.sh
 3. **场景 1 — healthy 基线**。以 `gpu.failureInjection.enabled=false` 安装，并断言：
 
    - 渲染出的 ConfigMap 里**没有** `failure:` 块；
-   - `nvidia-smi -L` 至少列出一块 GPU。脚本会记下实际观测到的数量，供后续场景复用——Pod 内的 GPU 数来自 chart 渲染出的 ConfigMap（也就是所选配置档），不受 `--set gpu.count` 影响，后者只作用于宿主机侧的 CDI 规格；
+   - `nvidia-smi -L` 至少列出一块 GPU。脚本会记下实际观测到的数量，供后续场景复用——Pod 内的 GPU 数来自 chart 渲染出的 ConfigMap（也就是所选 profile），不受 `--set gpu.count` 影响，后者只作用于宿主机侧的 CDI 规格；
    - 聚合的不可纠正 ECC 计数初始为 `0`。
 
 4. **场景 2 — `ecc_uncorrectable` + Xid 79**。以 `mode=ecc_uncorrectable, after_calls=1, xid.code=79` 升级 release、重建 DaemonSet，并断言：
 
    - ConfigMap 里现在有 `mode: ecc_uncorrectable`；
    - `nvidia-smi -L` **仍然**列出所有 GPU（这是该模式的约定：设备保持可寻址）；
-   - `nvidia-smi --query-gpu=ecc.errors.uncorrected.aggregate.total --format=csv,noheader,nounits` 至少为一块 GPU 输出一个严格大于 0 的整数。每块设备各自维护调用计数器，所以这一次查询（每块 GPU 一次受保护的 ECC 读取）会在同一次 `nvidia-smi` 调用里，让每块 GPU 在首次读取时触发。
+   - `nvidia-smi --query-gpu=ecc.errors.uncorrected.aggregate.total --format=csv,noheader,nounits` 至少为一块 GPU 输出一个严格大于 0 的整数。每块设备各自维护调用计数器。因此这一次查询（每块 GPU 一次受保护的 ECC 读取）会在同一次 `nvidia-smi` 调用里，让每块 GPU 在首次读取时触发。
 
 5. **场景 3 — `lost`**。以 `mode=lost, after_calls=1` 升级、重建 DaemonSet，并断言 `nvidia-smi --query-gpu=temperature.gpu --format=csv` 输出的是错误标记（`[N/A]`、`[Unknown Error]` 等），而不是正常的整数。第一次受保护的指标调用会让设备「掉线」，此后每一次 NVML 调用（指标、身份查询、句柄查找）都会返回 `ERROR_GPU_IS_LOST`。
 
 6. **场景 4 — `fallen_off_bus` + Xid 79**。NVML 层面的表现与 `lost` 相同，但额外把 `xid.code=79` 排入 NVML 事件集。断言同样的 `nvidia-smi` 错误标记行为，并确认 ConfigMap 同时带有 `mode: fallen_off_bus` 和 `code: 79`。
 
-每个场景都用 `helm upgrade --reuse-values`，这样各轮之间只改动故障注入相关的开关，其他配置（镜像、配置档、数量）都沿用场景 1 的设置。
+每个场景都用 `helm upgrade --reuse-values`，这样各轮之间只改动故障注入相关的开关，其他配置（镜像、profile、数量）都沿用场景 1 的设置。
 
 ## 快速开始
 

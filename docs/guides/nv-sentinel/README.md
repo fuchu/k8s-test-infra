@@ -7,7 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 
 这个演示要证明：[NVSentinel](https://github.com/NVIDIA/nvsentinel)（NVIDIA 开源的 GPU 健康监控与故障修复服务）能够**发现** GPU 温度异常、**修复**受影响的节点（cordon + drain），并在 GPU 降温后**自动恢复**该节点（uncordon）。整个过程跑在本地 Kind 集群上，**没有任何物理 GPU**，GPU 由 `nvml-mock` 模拟。
 
-演示注入的故障是**温度余量越界**。NVSentinel 的 `GpuThermalMarginWatch` 会把每块 GPU 实时的**带符号** T.Limit 余量（DCGM 字段 153）与该 GPU 的**硬件降速偏移值**作比较。这个偏移不是 DCGM 字段：NVSentinel 的 `metadata-collector` 会从 NVML 字段 194（`NVML_FI_DEV_TEMPERATURE_SLOWDOWN_TLIMIT`）读取一次，写进 `gpu_metadata.json`。余量低于偏移值时 GPU 被判为不健康；回升之后检查就会解除。
+演示注入的故障是**温度余量越界**。NVSentinel 的 `GpuThermalMarginWatch` 会把每块 GPU 实时的**带符号** T.Limit 余量（DCGM 字段 153）与该 GPU 的**硬件降速偏移值**作比较。这个偏移不是 DCGM 字段：NVSentinel 的 `metadata-collector` 会从 NVML 字段 194（`NVML_FI_DEV_TEMPERATURE_SLOWDOWN_TLIMIT`）读取一次，写进 `gpu_metadata.json`。余量低于偏移值时 GPU 即为不健康；回升之后检查就会解除。
 
 ```
 nvml-mock（模拟的 libnvidia-ml.so）
@@ -29,7 +29,7 @@ NVSentinel GPU Health Monitor  ──►  platform-connector  ──►  MongoDB
 
 1 个 control-plane + 2 个 worker：
 
-- **Worker**（带 `nvml-mock-gpu=true`）：运行 `nvml-mock` DaemonSet 和 GPU Operator 的全部子组件（DCGM、device plugin、GFD）。每个节点按配置档对外声明模拟 GPU，默认 `h100` 是 8 块。
+- **Worker**（带 `nvml-mock-gpu=true`）：运行 `nvml-mock` DaemonSet 和 GPU Operator 的全部子组件（DCGM、device plugin、GFD）。每个节点按 profile 对外声明模拟 GPU，默认 `h100` 是 8 块。
 - **Control-plane**：运行 NVSentinel 的控制面流水线（MongoDB、platform-connector、fault-quarantine、node-drainer）。把它固定在这里，是为了让「驱逐某个 GPU worker」时，不会顺带把正在执行驱逐的流水线也一起赶走。
 
 当一台 worker 的 GPU 过热时，NVSentinel 会 cordon/drain 它，示例 GPU 工作负载则重新调度到另一台健康的 worker 上。
@@ -86,13 +86,13 @@ kubectl --context kind-nvml-mock-nvsentinel -n mokka exec "$MOCK" -- \
   nvml-mock-ctl temp --gpu 0 142
 ```
 
-把温度固定在配置档的降速阈值之上（`h100` 是 87 °C，`gb300` 是 90 °C），会让 T.Limit 余量（DCGM 字段 153）变成负数。此时余量低于该 GPU 的降速偏移值（模拟层为 `0 °C`，来自 NVML 字段 194），GPU Health Monitor 的 `GpuThermalMarginWatch` 便以 `GPU_TEMP_HW_SLOWDOWN_VIOLATION` 失败，并产生类似这样的节点 condition：
+把温度固定在 profile 的降速阈值之上（`h100` 是 87 °C，`gb300` 是 90 °C），会让 T.Limit 余量（DCGM 字段 153）变成负数。此时余量低于该 GPU 的降速偏移值（模拟层为 `0 °C`，来自 NVML 字段 194），GPU Health Monitor 的 `GpuThermalMarginWatch` 便以 `GPU_TEMP_HW_SLOWDOWN_VIOLATION` 失败，并产生类似这样的节点 condition：
 
 ```
 GpuThermalMarginWatch=True: GPU 0 thermal margin -3°C below HW slowdown T.Limit (slowdown=0°C)
 ```
 
-这个比较是**严格小于**，所以温度恰好压在阈值上时效余量是 `0 °C`，检查仍算健康——必须超过阈值才会触发。
+这个比较是**严格小于**，所以温度恰好压在阈值上时，余量是 `0 °C`，检查仍算健康——必须超过阈值才会触发。
 
 随后 `fault-quarantine` 把节点 cordon，`node-drainer` 再把它 drain。
 
@@ -125,7 +125,7 @@ kubectl --context kind-nvml-mock-nvsentinel -n mokka exec "$MOCK" -- \
 
 ## 为什么用 Percona MongoDB store
 
-NVSentinel 的 `mongodb-store` 子 chart 默认使用 Bitnami MongoDB chart，它的镜像（`bitnamilegacy/*`）只有 amd64 版本，容器里跑的也是 Bitnami 专属启动脚本，在 arm64 上根本起不来。该子 chart 另外提供了一条 [Percona Server for MongoDB](https://docs.nvidia.com/nvsentinel/runbooks/mongo-db-bitnami-to-percona-migration/) 路径，其涉及的每个镜像——`percona-server-mongodb`、operator、`mongosh`——都同时发布 `linux/amd64` 和 `linux/arm64` 版本，所以演示选了它：
+NVSentinel 的 `mongodb-store` 子 chart 默认使用 Bitnami MongoDB chart。它的镜像（`bitnamilegacy/*`）只有 amd64 版本，容器里跑的也是 Bitnami 专属启动脚本，在 arm64 上根本起不来。该子 chart 另外提供了一条 [Percona Server for MongoDB](https://docs.nvidia.com/nvsentinel/runbooks/mongo-db-bitnami-to-percona-migration/) 路径，其涉及的每个镜像——`percona-server-mongodb`、operator、`mongosh`——都同时发布 `linux/amd64` 和 `linux/arm64` 版本，所以演示选了它：
 
 ```yaml
 mongodb-store:

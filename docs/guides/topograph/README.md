@@ -37,7 +37,7 @@ flowchart LR
 没有任何节点带 clique 标签：拓扑信息的唯一来源就是 Mokka 上报的交换网信息。
 
 !!! note "为什么要单独起一个 `nvidia-smi` DaemonSet"
-    在真实集群里，节点数据代理会在 GPU Operator 的 device plugin Pod 中跑 `nvidia-smi`。这里用一个单容器 DaemonSet 顶替它，于是本指南既不需要 GPU Operator，也不需要 DRA driver。Mokka 自己的 Pod 不能拿来当目标：Topograph 的 exec 没有指定容器，会落到 [NRI 插件](../../components/nri-plugin.md)容器里，而那里没有模拟驱动，只会报 `[N/A]`。
+    在真实集群里，节点数据代理会在 GPU Operator 的 device plugin Pod 中跑 `nvidia-smi`。这里用一个单容器 DaemonSet 顶替它，于是本指南既不需要 GPU Operator，也不需要 DRA driver。Mokka 自己的 Pod 不能拿来当目标：Topograph 的 exec 没有指定容器，会落到 [NRI 插件](../../components/nri-plugin.md) 容器里，而那里没有模拟驱动，只会报 `[N/A]`。
 
 ## 前置条件
 
@@ -126,11 +126,11 @@ helm install nvml-mock oci://ghcr.io/nvidia/k8s-test-infra/chart/nvml-mock \
   --wait --timeout 300s
 ```
 
-1. GB200 配置档会通过 `nvmlDeviceGetGpuFabricInfo` 上报 NVLink 交换网身份。
+1. GB200 profile 通过 `nvmlDeviceGetGpuFabricInfo` 上报 NVLink 交换网身份。
+2. 每个 worker 按节点名出现，且恰好属于一个 clique。
 
 !!! note "国内镜像拉取"
     若 `ghcr.io` 等镜像源拉取缓慢或超时，可给 `nvml-mock` 加 `--set global.imageRegistry=harbor.heilansc.com/ghcr.io`。具体做法与示例见[国内镜像加速](../README.md#domestic-mirror)。
-2. 每个 worker 按节点名出现，且恰好属于一个 clique。
 
 ## 第 3 步 — 给每个 worker 准备一个 `nvidia-smi` Pod
 
@@ -272,7 +272,7 @@ kubectl -n topograph rollout restart ds/topograph-node-data-broker
 
 **第 3 步报 `nvidia-smi: not found`。** NRI 插件只在**容器创建时**注入，而且只作用于 `mokka` 和 `kube-system` 之外、带注解的 Pod。检查注解和命名空间，再执行 `kubectl -n topograph rollout restart ds/nvidia-smi` 重建 Pod。
 
-**第 3 步输出的 clique 和预期不同。** `topology.domains` 里的 worker 名必须和节点名完全一致；没写进拓扑的节点会报出该配置档的默认交换网信息。
+**第 3 步输出的 clique 和预期不同。** `topology.domains` 里的 worker 名必须和节点名完全一致；没写进拓扑的节点会报出该 profile 的默认交换网信息。
 
 控制平面缺少 `topograph.run/instance` 注解的告警属于预期：代理不容忍控制平面的污点，本来就不会跑在那里。
 

@@ -22,7 +22,7 @@
 | 工作节点 | 2 台按需计费的 `t3.large` | 纯 CPU，内存足够跑系统组件和 Mokka Pod |
 | 节点镜像 | EKS 优化版标准 AL2023 x86_64，`1.35.7-20260911` | 原生 containerd 跑在 systemd 下，且不带任何 NVIDIA 软件，因此 NVIDIA 运行时完全由 Mokka 来装 |
 | 节点网络位置 | 两个可用区的私有子网，共用一个 NAT 网关 | 每个 worker 跑一个 Mokka Pod，worker 不需要公网 IP，同时把参考集群的 NAT 成本压低 |
-| Mokka | 最新版；最后一次验证用的是 `0.5.0` + `gb300` 配置档 | 下面的安装命令取最新发布的 chart，其默认镜像标签就是 chart 的 appVersion |
+| Mokka | 最新版；最后一次验证用的是 `0.5.0` + `gb300` profile | 下面的安装命令取最新发布的 chart，其默认镜像标签就是 chart 的 appVersion |
 | Device plugin | `nvcr.io/nvidia/k8s-device-plugin:v0.18.2` | 通过 Mokka 的 NVML 实现对外暴露 `nvidia.com/gpu` |
 | Container toolkit | `1.19.1`，随 Mokka `0.5.0` 镜像一起提供 | Mokka 在每个 worker 上安装 NVIDIA runtime 和 CDI hook，并向 containerd 注册该运行时 |
 
@@ -40,7 +40,7 @@
 - [Helm](https://helm.sh/docs/intro/install/) 3.8 或更高版本
 - `curl` 和 `jq`
 
-此外还需要一个 EKS 集群，其中至少有一台专用的 Linux x86_64 CPU worker，节点镜像里的 containerd 必须运行在 systemd 下（标准 AL2023 镜像就满足）。原因如下：Mokka 需要特权 Pod 和 `hostPath` 卷；它会在每个 worker 上安装 NVIDIA 容器运行时，并把它设为 containerd 的默认 runtime handler（`nvidia`），且工作在 CDI 模式。因此 worker 既不需要物理 GPU，也不需要预装 NVIDIA 软件。
+此外还需要一个 EKS 集群，其中至少有一台专用的 Linux x86_64 CPU worker，节点镜像里的 containerd 必须运行在 systemd 下（标准 AL2023 镜像就满足）。Mokka 需要特权 Pod 和 `hostPath` 卷；它会在每个 worker 上安装 NVIDIA 容器运行时，并把它设为 containerd 的默认 runtime handler（`nvidia`），且工作在 CDI 模式。因此 worker 既不需要物理 GPU，也不需要预装 NVIDIA 软件。
 [容器运行时配置](../../../../components/node-daemon.md#container-runtime-setup) 列出了节点上具体会被改动的内容。
 
 如果节点镜像本身已经装了 NVIDIA Container Toolkit（例如加速版 AL2023 镜像），Mokka 会保持原样不动。此时该运行时必须已经是 CDI 模式，因为默认的 `auto` 模式会尝试初始化一块物理 GPU。
@@ -192,7 +192,7 @@ kubectl --context "${MOKKA_CONTEXT}" \
 !!! note "国内镜像拉取"
     本指南会从 `ghcr.io`（nvml-mock）和 `nvcr.io`（NVIDIA device plugin）拉取镜像。若这些镜像源拉取缓慢或超时，可给相关 chart 的镜像加私有仓库前缀（如给 `nvml-mock` 加 `--set global.imageRegistry=harbor.heilansc.com/ghcr.io`；device plugin 在 `device-plugin-values.yaml` 里把镜像 repository 改为 `harbor.heilansc.com/nvcr.io/nvidia/k8s-device-plugin`）。具体做法与示例见[国内镜像加速](../README.md#domestic-mirror)。
 
-只有当所在 worker 的 containerd 把 `nvidia` 作为默认 runtime handler 之后，Mokka Pod 才会变成 Ready；为达到这个状态，worker 上的 containerd 会被重启一次。`mokka-values.yaml` 把 containerd 的配置目录（Mokka 配置文件存放处）设为 `/etc/containerd/config.d`。`nodeadm` 每次启动时改写的 `config.toml` 本来就会导入这个目录，因此这套配置不依赖某条会在下次启动时被删掉的 `imports` 条目。
+只有当所在 worker 的 containerd 把 `nvidia` 作为默认 runtime handler 之后，Mokka Pod 才会变成 Ready；为达到这个状态，Mokka 会重启 worker 上的 containerd 一次。`mokka-values.yaml` 把 containerd 的配置目录（Mokka 配置文件存放处）设为 `/etc/containerd/config.d`。`nodeadm` 每次启动时改写的 `config.toml` 本来就会导入这个目录，因此这套配置不依赖某条会在下次启动时被删掉的 `imports` 条目。
 
 ## 5. 对外暴露模拟 GPU
 

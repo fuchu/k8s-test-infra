@@ -1,15 +1,14 @@
-# Quick Start
+# 快速开始
 
-Install Mokka on a Kubernetes cluster and watch `nvidia-smi` report GPUs that do
-not exist. Five minutes, no NVIDIA hardware.
+在 Kubernetes 集群上安装 Mokka，然后看 `nvidia-smi` 报告并不存在的 GPU。五分钟搞定，无需 NVIDIA 硬件。
 
-## Prerequisites
+## 前置条件
 
-- [Helm 3.8 or newer](https://helm.sh/docs/intro/install/) — the chart is served from an OCI registry.
-- [kubectl](https://kubernetes.io/docs/reference/kubectl/), pointed at the cluster you want to use
-- Docker and [Kind](https://kind.sigs.k8s.io/), only if you want a throwaway, local cluster
+- [Helm 3.8 或更高版本](https://helm.sh/docs/intro/install/)——chart 从 OCI 仓库提供。
+- [kubectl](https://kubernetes.io/docs/reference/kubectl/)，指向你要使用的集群。
+- Docker 和 [Kind](https://kind.sigs.k8s.io/)——仅当你需要一个临时的本地集群时才需要。
 
-## Install
+## 安装
 
 ```bash
 kind create cluster --name mokka
@@ -20,17 +19,11 @@ helm install nvml-mock \
     --create-namespace
 ```
 
-Already have a cluster? Skip the `kind` line. The chart prepares each node's
-containerd itself, so any cluster whose nodes run containerd 1.7 or later under
-systemd works; see the [Amazon EKS guide](guides/install/aws/eks/README.md) for
-a managed one.
+已经有集群？跳过 `kind` 那一行即可。chart 会自行准备每个节点的 containerd，因此只要节点在 systemd 下运行 containerd 1.7 或更高版本，任何集群都可以；托管集群可参见 [Amazon EKS 指南](guides/install/aws/eks/README.md)。
 
-On the default `gb300` profile each node also downloads NVIDIA's IMEX archive
-from `developer.download.nvidia.com`, for DRA ComputeDomains. A node that cannot
-reach it keeps working without IMEX; add
-`--set featureGates.IMEXDownload=false` to skip the download.
+在默认的 `gb300` profile 下，每个节点还会从 `developer.download.nvidia.com` 下载 NVIDIA 的 IMEX 归档包，用于 DRA ComputeDomain。无法访问该地址的节点仍可在没有 IMEX 的情况下工作；添加 `--set featureGates.IMEXDownload=false` 可跳过下载。
 
-## Verify
+## 验证
 
 ```bash
 kubectl exec -n mokka ds/nvml-mock -- nvidia-smi -L
@@ -43,12 +36,11 @@ GPU 2: NVIDIA GB300 NVL (UUID: GPU-...)
 GPU 3: NVIDIA GB300 NVL (UUID: GPU-...)
 ```
 
-That is the real `nvidia-smi` binary, unmodified, reading Mokka's driver instead
-of a physical one. `nvidia-smi -q` works too, and reports the full profile.
+这是未经修改的真实 `nvidia-smi` 二进制文件，它读取的是 Mokka 的驱动，而不是物理驱动。`nvidia-smi -q` 同样可用，会报告完整的 profile。
 
-## Change the GPU model
+## 修改 GPU 型号
 
-`gb300` is the default. Every node in the cluster takes the same profile:
+`gb300` 是默认型号。集群中的每个节点都采用同一个 profile：
 
 ```bash
 helm upgrade nvml-mock \
@@ -57,33 +49,25 @@ helm upgrade nvml-mock \
     --set gpu.profile=a100
 ```
 
-Eight profiles ship with the chart: `a100`, `b200`, `gb200`, `gb300`, `h100`,
-`l40s`, `t4` and `vrnvl72`. [Configuration](configuration.md) covers what each one
-defines and how to change individual values.
+chart 自带八种 profile：`a100`、`b200`、`gb200`、`gb300`、`h100`、`l40s`、`t4` 和 `vrnvl72`。[配置参考](configuration.md)介绍每种 profile 定义了什么，以及如何修改单个值。
 
-## Clean up
+## 清理
 
 ```bash
 helm uninstall nvml-mock --namespace mokka
-kind delete cluster --name mokka          # if you created one above
+kind delete cluster --name mokka          # 如果上面创建过集群
 ```
 
-## Next steps
+## 下一步
 
-You have a node that *looks* like it has GPUs. The interesting part is pointing
-real software at it.
+你现在拥有了一个*看起来*有 GPU 的节点。有意思的部分是把真实软件指向它。
 
-| To do this | Go to |
+| 要做的事 | 前往 |
 |---|---|
-| Schedule GPU workloads with the device plugin, DRA or the GPU Operator | [Installation](helm-chart.md) |
-| Break a GPU and watch consumers react | [Failure injection](guides/failure-injection/README.md) |
-| Check that GPU workloads get the mock driver | [Set up NRI injection](guides/nri-injection.md) |
-| Change temperature, power or health on a running node | [Runtime control](nvml-mock-ctl.md) |
-| Understand what is actually happening | [Architecture](architecture.md) |
+| 使用 device plugin、DRA 或 GPU Operator 调度 GPU 工作负载 | [安装](helm-chart.md) |
+| 让一块 GPU 发生故障，观察消费者如何反应 | [故障注入](guides/failure-injection/README.md) |
+| 检查 GPU 工作负载是否获得模拟驱动 | [配置 NRI 注入](guides/nri-injection.md) |
+| 在运行中的节点上修改温度、功耗或健康状态 | [运行时控制](nvml-mock-ctl.md) |
+| 理解实际发生了什么 | [架构](architecture.md) |
 
-The node daemon installs the NVIDIA container runtime on each node and makes it
-containerd's default handler, `nvidia`, with the Container Device Interface
-(CDI) on. That is the runtime setup the
-[device plugin](guides/device-plugin.md), [DRA](guides/dra.md) and
-[GPU Operator](guides/gpu-operator.md) paths use; see
-[Container runtime setup](components/node-daemon.md#container-runtime-setup).
+节点守护进程会在每个节点上安装 NVIDIA 容器运行时，并将其设为 containerd 的默认 handler `nvidia`，同时启用容器设备接口（CDI）。这是 [device plugin](guides/device-plugin.md)、[DRA](guides/dra.md) 和 [GPU Operator](guides/gpu-operator.md) 路径所使用的运行时配置；参见[容器运行时设置](components/node-daemon.md#container-runtime-setup)。

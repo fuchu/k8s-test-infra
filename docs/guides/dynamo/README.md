@@ -1,6 +1,6 @@
 # NVIDIA Dynamo
 
-在一台 GPU 都没有的集群上，用 [NVIDIA Dynamo](https://github.com/ai-dynamo/dynamo) 提供一个 OpenAI 兼容的接口。这里用的是真正的 Dynamo operator 来部署推理图，真正的 GPU Operator 把 worker 调度到模拟 GPU 上，一次对话补全请求会完整走一遍 Dynamo 的 frontend 和 router。
+在一台 GPU 都没有的集群上，用 [NVIDIA Dynamo](https://github.com/ai-dynamo/dynamo) 提供一个 OpenAI 兼容的接口。这里用真正的 Dynamo operator 部署推理图，用真正的 GPU Operator 把 worker 调度到模拟 GPU 上，一次对话补全请求会完整走一遍 Dynamo 的 frontend 和 router。
 
 ## 整体是怎么串起来的
 
@@ -20,7 +20,7 @@ flowchart LR
     fe -- 转发请求 --> wk
 ```
 
-device plugin 的分配动作会把模拟的 `libnvidia-ml.so` 和 `nvidia-smi` 带进 worker，但**不会**带上节点的 GPU 型号配置。[NRI 插件](../../components/nri-plugin.md) 会在容器创建时补上这份配置，于是 worker 恰好只看到分配给它的那一块 GPU。如果关掉 NRI 插件，无论节点跑的是哪个配置档，worker 都会报出默认的 `Mock NVIDIA A100-SXM4-40GB`。
+device plugin 的分配动作会把模拟的 `libnvidia-ml.so` 和 `nvidia-smi` 带进 worker，但**不会**带上节点的 GPU 型号配置。[NRI 插件](../../components/nri-plugin.md) 会在容器创建时补上这份配置，于是 worker 恰好只看到分配给它的那一块 GPU。如果关掉 NRI 插件，无论节点跑的是哪个 profile，worker 都会报出默认的 `Mock NVIDIA A100-SXM4-40GB`。
 
 ## 前置条件
 
@@ -44,7 +44,7 @@ EOF
 kind create cluster --name dynamo --config kind.yaml
 ```
 
-第 2 步启动 Mokka 时，它的节点守护进程会一次性把 containerd 配置好，同时满足 GPU Operator 和 NRI 插件的需要，所以集群不用再做别的准备；详见 [容器运行时配置](../../components/node-daemon.md#container-runtime-setup)。
+第 2 步启动 Mokka 时，它的 node-agent 会一次性把 containerd 配置好，同时满足 GPU Operator 和 NRI 插件的需要，所以集群不用再做别的准备；详见 [容器运行时配置](../../components/node-daemon.md#container-runtime-setup)。
 
 ## 第 2 步 — 安装 Mokka 并启用 NRI 插件
 
@@ -61,7 +61,7 @@ helm install nvml-mock oci://ghcr.io/nvidia/k8s-test-infra/chart/nvml-mock \
 !!! note "国内镜像拉取"
     本指南会从 `ghcr.io`（nvml-mock）、`helm.ngc.nvidia.com` / `nvcr.io`（GPU Operator、Dynamo 平台）拉取镜像。若这些镜像源拉取缓慢或超时，可给相关 chart 的镜像加私有仓库前缀（如给 `nvml-mock` 加 `--set global.imageRegistry=harbor.heilansc.com/ghcr.io`）。具体做法与示例见[国内镜像加速](../README.md#domestic-mirror)。
 
-`excludedNamespaces` 用来让插件避开 GPU Operator 的 Pod，后者和 [GPU Operator 指南](../gpu-operator.md) 里一样，不需要这个插件。在 0.4.x 版本上，如果不加这项，插件会把 operator 的 validator 也注入一遍，而每次 validator 启动都会在节点上再多叠一层挂载；参见 [启用 NRI 后节点上的挂载会不断累积](../../troubleshooting.md#mounts-pile-up-on-a-node-with-nri-enabled)。
+`excludedNamespaces` 用来让插件避开 GPU Operator 的 Pod，后者和 [GPU Operator 指南](../gpu-operator.md) 里一样，不需要这个插件。在 0.4.x 版本上，如果不加这项，插件会把 operator 的 validator 也注入一遍。每次 validator 启动都会在节点上再多叠一层挂载；参见 [启用 NRI 后节点上的挂载会不断累积](../../troubleshooting.md#mounts-pile-up-on-a-node-with-nri-enabled)。
 
 ## 第 3 步 — 安装 GPU Operator
 
@@ -76,7 +76,7 @@ helm install gpu-operator nvidia/gpu-operator --version v26.3.3 \
   --wait --timeout 600s
 
 kubectl get node dynamo-worker -o jsonpath='{.status.allocatable.nvidia\.com/gpu}'
-# 4 —— gb300 默认配置档有 4 个设备
+# 4 —— gb300 默认profile有 4 个设备
 ```
 
 等这个数字变成非零再往下走。在 device plugin 注册上来之前，Dynamo worker 没有可调度的地方。
@@ -95,7 +95,7 @@ helm install dynamo-platform \
 
 这一步只装 operator。etcd、NATS、Grove 和 KAI Scheduler 都是可选项，默认关闭；一张聚合式推理图不需要它们。
 
-`--wait` 很关键：operator 是通过 init 容器安装自己的 CRD 的，在这之前 `DynamoGraphDeployment` 这个类型根本还不存在。
+`--wait` 很关键：operator 在 init 容器里安装自己的 CRD，在此之前 `DynamoGraphDeployment` 这个类型根本还不存在。
 
 ## 第 5 步 — 部署推理图
 
@@ -142,13 +142,13 @@ kubectl apply -f qwen3.yaml
 kubectl -n dynamo-system wait dgd/qwen3 --for=condition=Ready --timeout=600s
 ```
 
-1. Dynamo 自带的 mocker 示例本身不申请 GPU。这里加上这次申请，才能让 worker 被放到模拟 GPU 节点上，并拿到模拟驱动。
+1. Dynamo 自带的 mocker 示例本身不申请 GPU。这里加上这次申请，好让 worker 落到模拟 GPU 节点上并拿到模拟驱动。
 
-没有专门的 mocker 镜像：mocker 依赖的 Python 包就随 `dynamo-planner` 一起发布。`Qwen/Qwen3-0.6B` 是无需申请的模型，因此不需要 Hugging Face token。
+没有专门的 mocker 镜像：mocker 依赖的 Python 包就随 `dynamo-planner` 一起发布。`Qwen/Qwen3-0.6B` 无需申请，因此不需要 Hugging Face token。
 
 ## 第 6 步 — 验证
 
-worker 应该只看到分配给它的那一块 GPU，而且型号就是节点的配置档：
+worker 应该只看到分配给它的那一块 GPU，而且型号就是节点的 profile：
 
 ```bash
 WORKER=$(kubectl -n dynamo-system get pod \
@@ -182,7 +182,7 @@ curl -s localhost:8000/v1/chat/completions \
 说明模拟库没找到型号配置，退回了内置的默认值。原因通常是 NRI 插件没开，或者 worker 创建得比插件注册还早——NRI 只在容器创建那一刻做修改。检查 worker 所在节点上的 `nvml-mock` Pod 是否 Ready、`nvml-mock-nri` 容器是否在运行，然后删掉 worker Pod 让 operator 重建它。
 
 **worker 明明在跑，`/v1/models` 却是空的，请求返回 404。**
-推理图刚报告 Ready 后的几秒内属于正常：frontend 还没发现 worker，重试即可。如果两分钟后依然为空，说明 frontend 漏掉了 worker——冷启动时 frontend 可能比 worker 早好几分钟起来，就会发生这种情况。删掉 frontend Pod，新起来的那个会在启动时发现 worker。
+推理图刚报告 Ready 后的几秒内属于正常：frontend 还没发现 worker，重试即可。如果两分钟后依然为空，说明 frontend 漏掉了 worker——冷启动时 frontend 可能比 worker 早好几分钟起来。删掉 frontend Pod，新起来的那个会在启动时发现 worker。
 
 **worker 一直是 `Pending`。**
 节点还没有对外提供 `nvidia.com/gpu`。检查 GPU Operator 的 device plugin 是否在运行：`kubectl -n gpu-operator get pods`。

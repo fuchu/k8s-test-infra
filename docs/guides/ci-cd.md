@@ -1,22 +1,17 @@
-# Use in CI/CD
+# 在 CI/CD 中使用
 
-Run tests that need GPUs on ordinary CPU runners. Mokka installs into a
-throwaway Kubernetes cluster inside the job, your software talks to it as though
-the hardware were real, and the job tears everything down at the end.
+让需要 GPU 的测试跑在普通 CPU runner 上。Mokka 在作业内安装到一个临时 Kubernetes 集群中，你的软件与它交互时就像硬件是真的，作业结束时一并拆除。
 
-This is the use case Mokka exists for: GPU runners are scarce and expensive, and
-most of what GPU software does in CI is *discover* and *schedule* hardware
-rather than compute on it.
+这正是 Mokka 存在的用例：GPU runner 稀缺且昂贵，而 GPU 软件在 CI 中所做的大部分事情是*发现*和*调度*硬件，而不是在其上计算。
 
-## The shape of a job
+## 作业的结构
 
-Four steps, in this order:
+四步，顺序如下：
 
-1. Create a Kubernetes cluster on the runner — Kind is the usual choice.
-2. Install the Mokka chart: the latest release to start with, then pinned to the
-   release your tests passed against.
-3. Wait for the DaemonSet to be ready.
-4. Run your tests against the cluster.
+1. 在 runner 上创建 Kubernetes 集群——通常选 Kind。
+2. 安装 Mokka chart：起初用最新版本，测试通过后固定到通过测试的那个版本。
+3. 等待 DaemonSet 就绪。
+4. 针对集群运行你的测试。
 
 ## GitHub Actions
 
@@ -48,65 +43,48 @@ jobs:
         run: ./run-my-gpu-tests.sh
 ```
 
-`--wait` is what makes this reliable: without it the next step starts before the
-DaemonSet is serving, and your tests fail on a node that does not report GPUs
-yet.
+`--wait` 是可靠性的关键：没有它，下一步会在 DaemonSet 开始服务之前启动，测试就会在一个尚未上报 GPU 的节点上失败。
 
-## Pin the chart version
+## 固定 chart 版本
 
-Without `--version`, `helm install` takes the latest stable Mokka release.
-Once your tests pass, add `--version` with the release they passed against. An
-unpinned chart means an upstream release can change what your CI sees on a day
-you changed nothing, and the failure will not look like a version change.
+没有 `--version` 时，`helm install` 会取最新的稳定 Mokka 版本。测试通过后，加上 `--version` 并指定通过测试的那个版本。不固定 chart 意味着某天你什么都没改，上游发布却改变了 CI 看到的东西，而且失败看起来不像版本变化。
 
-## Choosing a profile
+## 选择 profile
 
-The profile decides what hardware your software believes it found, so pick the
-one your tests assert against:
+profile 决定你的软件认为发现了什么硬件，因此请选择测试所针对的那一个：
 
 ```yaml
---set gpu.profile=a100      # 8 GPUs, 40 GiB each
---set gpu.profile=t4        # 4 GPUs, 16 GiB each — the smallest
---set gpu.profile=gb200     # 4 GPUs with NVLink fabric
+--set gpu.profile=a100      # 8 块 GPU，每块 40 GiB
+--set gpu.profile=t4        # 4 块 GPU，每块 16 GiB——最小的
+--set gpu.profile=gb200     # 4 块带 NVLink fabric 的 GPU
 ```
 
-To exercise more than one, run a job matrix over profiles rather than
-installing several releases into one cluster.
+要覆盖多个 profile，请按 profile 运行作业矩阵，而不是在一个集群里安装多个 release。
 
-## Testing failure handling
+## 测试故障处理
 
-Mokka can present broken hardware, which is otherwise almost impossible to
-arrange in CI. A GPU that has fallen off the bus, an uncorrectable ECC error, or
-a device that reports as lost are all configuration:
+Mokka 可以呈现损坏的硬件，这在其他情况下几乎无法在 CI 中安排。GPU 从总线脱落、不可纠正 ECC 错误，或报告为丢失的设备，都是配置问题：
 
 ```yaml
 --set gpu.failureInjection.enabled=true \
 --set gpu.failureInjection.mode=ecc_uncorrectable
 ```
 
-To move a GPU between healthy and broken *within* a single job, use
-[runtime control](../nvml-mock-ctl.md) instead of reinstalling — it takes effect
-in about a second and needs no rollout.
+要在单个作业*之内*让 GPU 在健康与故障之间切换，请使用[运行时控制](../nvml-mock-ctl.md)而不是重装——它约一秒生效，且无需滚动发布。
 
-## What a plain cluster covers
+## 普通集群能覆盖什么
 
-A plain Kind cluster is enough for the mock driver and `nvidia-smi`, node
-labels, the NVIDIA device plugin, the DRA driver, the GPU Operator and NRI
-injection. Mokka's node daemon registers the `nvidia` runtime handler with
-containerd and turns CDI and NRI on; see
-[Container runtime setup](../components/node-daemon.md#container-runtime-setup).
+普通 Kind 集群就足以支持模拟驱动和 `nvidia-smi`、节点标签、NVIDIA device plugin、DRA driver、GPU Operator 和 NRI 注入。Mokka 的节点守护进程会向 containerd 注册 `nvidia` 运行时 handler 并开启 CDI 和 NRI；参见[容器运行时设置](../components/node-daemon.md#container-runtime-setup)。
 
-## Keeping jobs fast
+## 让作业保持快速
 
-Most of the wall-clock is image pulls, not Mokka. Cache the runner's image layers
-if your CI supports it, and prefer the smallest profile that still exercises what
-you are testing — `t4` presents four GPUs instead of eight.
+大部分耗时是镜像拉取，而不是 Mokka。若 CI 支持，请缓存 runner 的镜像层，并优先选择仍能覆盖测试目标的最小 profile——`t4` 呈现四块 GPU 而非八块。
 
-## Related
+## 相关链接
 
-| To read about                   | See                                              |
-|---------------------------------|--------------------------------------------------|
-| Every chart value               | [Installation](../helm-chart.md)                 |
-| What a profile defines          | [Configuration](../configuration.md)             |
-| Changing GPU state mid-job      | [Runtime Control](../nvml-mock-ctl.md)           |
-| A failure-injection walkthrough | [Failure injection](failure-injection/README.md) |
+| 想了解 | 参见 |
+|---|---|
+| 所有 chart 取值 | [安装](../helm-chart.md) |
+| profile 定义了什么 | [配置参考](../configuration.md) |
+| 作业中途修改 GPU 状态 | [运行时控制](../nvml-mock-ctl.md) |
+| 故障注入演练 | [故障注入](failure-injection/README.md) |

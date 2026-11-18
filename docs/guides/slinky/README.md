@@ -16,7 +16,7 @@ flowchart LR
     ctld -- "srun --gres=gpu:2" --> sd
 ```
 
-没有人直接告诉 `slurmd` 它有几块 GPU。只要 `gres.conf` 里写了 `AutoDetect=nvidia`，它就会去读 NVIDIA 内核驱动公开的文件：先列 `/proc/driver/nvidia/gpus/` 找出所有 GPU，再从各自的 `information` 文件里读出型号、UUID 和次设备号，最后从 `/sys/bus/pci/drivers/nvidia/<pci-address>/local_cpulist` 读出 CPU 亲和性。这些文件由 Mokka 提供，而 [NRI 插件](../../components/nri-plugin.md) 负责让它们在 `slurmd` 容器内部可见。由于 runc 不允许在 `/proc` 里做挂载，实际是靠 `libmockfs.so` 拦截这些读取操作实现的，详见 [函数库与垫片](../../components/libraries-and-shims.md#libmockfs)。
+没有人直接告诉 `slurmd` 它有几块 GPU。只要 `gres.conf` 里写了 `AutoDetect=nvidia`，它就会去读 NVIDIA 内核驱动公开的文件：先列 `/proc/driver/nvidia/gpus/` 找出所有 GPU，再从各自的 `information` 文件里读出型号、UUID 和次设备号，最后从 `/sys/bus/pci/drivers/nvidia/<pci-address>/local_cpulist` 读出 CPU 亲和性。这些文件由 Mokka 提供，而 [NRI 插件](../../components/nri-plugin.md) 负责让它们在 `slurmd` 容器内部可见。由于 runc 不允许在 `/proc` 里做挂载，实际是靠 `libmockfs.so` 拦截这些读取操作实现的，详见 [函数库与 shim](../../components/libraries-and-shims.md#libmockfs)。
 
 !!! note "需要 nvml-mock 0.5.0 或更高版本"
     更早的版本不提供上面这些驱动文件，结果就是 `slurmd` 找不到任何 GPU，每个节点都会注册成 `Gres=(null)`。
@@ -43,7 +43,7 @@ EOF
 kind create cluster --name slinky --config kind.yaml
 ```
 
-第 2 步启动 Mokka 时，它的节点守护进程会一次性把 containerd 配置好，同时满足 GPU Operator 和 NRI 插件的需要，所以集群不用再做别的准备；详见 [容器运行时配置](../../components/node-daemon.md#container-runtime-setup)。
+第 2 步启动 Mokka 时，它的 node-agent 会一次性把 containerd 配置好，同时满足 GPU Operator 和 NRI 插件的需要，所以集群不用再做别的准备；详见 [容器运行时配置](../../components/node-daemon.md#container-runtime-setup)。
 
 ## 第 2 步 — 安装 Mokka
 
@@ -53,7 +53,7 @@ helm install nvml-mock oci://ghcr.io/nvidia/k8s-test-infra/chart/nvml-mock \
   --wait --timeout 300s
 ```
 
-NRI 插件默认开启。默认的 `gb300` 配置档给每个节点 4 块 GPU，第 5 步的配置依赖这个数量。
+NRI 插件默认开启。默认的 `gb300` profile 给每个节点 4 块 GPU，第 5 步的配置依赖这个数量。
 
 !!! note "国内镜像拉取"
     本指南会从 `ghcr.io`（nvml-mock、cert-manager、Slurm）和 `helm.ngc.nvidia.com` / `nvcr.io`（GPU Operator）拉取镜像。若这些镜像源拉取缓慢或超时，可给相关 chart 的镜像加私有仓库前缀（如给 `nvml-mock` 加 `--set global.imageRegistry=harbor.heilansc.com/ghcr.io`，给 GPU Operator 的各镜像加 `harbor.heilansc.com/nvcr.io` 前缀）。具体做法与示例见[国内镜像加速](../README.md#domestic-mirror)。
@@ -139,7 +139,7 @@ kubectl -n slurm wait pod -l app.kubernetes.io/name=slurmd \
 1. `slurmd` 自己从 Mokka 提供的驱动文件里发现 GPU，所以 `gres.conf` 和节点的 `Gres` 都不用把 GPU 列出来。
 2. 少了这一项，`slurmctld` 会丢掉每个节点上报的 GPU，节点最终注册成 `Gres=(null)`。chart 1.2.3 默认不会设置它。
 3. 每个 GPU 节点跑一个 `slurmd`，这样 Slurm 集群会随 Kubernetes 集群一起扩容。
-4. 申请节点上的全部 GPU，Slurm 才能把它们分给不同作业。这个值必须和配置档里的 GPU 数量一致。同时，正是这次 GPU 分配让 NRI 插件把驱动文件交给 `slurmd`——它只注入持有 GPU 的容器。
+4. 申请节点上的全部 GPU，Slurm 才能把它们分给不同作业。这个值必须和 profile 里的 GPU 数量一致。同时，正是这次 GPU 分配让 NRI 插件把驱动文件交给 `slurmd`——它只注入持有 GPU 的容器。
 5. Mokka 通过 Node Feature Discovery 给自己的节点打上 NVIDIA PCI 厂商 ID 标签，因此 `slurmd` 只会落在模拟 GPU 节点上。
 
 `slurmd` Pod 是在 `helm install` 返回之后才由 operator 创建的，所以第一条 `kubectl wait` 是等它们「出现」。如果一上来就等 `Ready`，会直接报 `no matching resources found`。
@@ -154,7 +154,7 @@ kubectl -n slurm exec slurm-controller-0 -c slurmctld -- sinfo -N -o '%N %T %G'
 # slinky-worker idle gpu:nvidia_gb300_nvl:4(S:0)
 ```
 
-Slurm 会用读到的型号给 GPU 类型命名；`(S:0)` 则是它根据 GPU 的 `local_cpulist` 推算出的 CPU 插槽编号。两者都会随配置档变化。不加类型限定的 `--gres=gpu:2` 可以匹配任意类型。
+Slurm 会用读到的型号给 GPU 类型命名；`(S:0)` 则是它根据 GPU 的 `local_cpulist` 推算出的 CPU 插槽编号。两者都会随 profile 变化。不加类型限定的 `--gres=gpu:2` 可以匹配任意类型。
 
 接着提交一个申请 2 块 GPU 的作业：
 
@@ -171,7 +171,7 @@ kubectl -n slurm exec slurm-controller-0 -c slurmctld -- \
 
 **作业里的 `nvidia-smi` 会列出节点上的所有 GPU。** 模拟层是根据进程能打开哪些 `/dev/nvidia*` 设备节点，来决定让它「看见」哪些 GPU 的。真实 Slurm 靠 cgroup 设备规则把作业限制在自己的 GPU 范围内，而模拟层没有实现这一层。`CUDA_VISIBLE_DEVICES` 仍然是正确的，CUDA 程序认的也正是它。
 
-**作业读到的是节点上真实的驱动文件。** Slurm 传给作业的是执行 `srun` 那个 shell 的环境，而不是 `slurmd` 的环境，所以 NRI 插件预加载进 `slurmd` 的垫片在作业里并不生效。作业里的 NVML 仍会报告节点的配置档，但如果作业直接去读 `/proc/driver/nvidia` 或 PCI sysfs，看到的就是真实文件；参见 [哪些容器会被注入](../../components/nri-plugin.md#which-containers-are-injected)。
+**作业读到的是节点上真实的驱动文件。** Slurm 传给作业的是执行 `srun` 那个 shell 的环境，而不是 `slurmd` 的环境，所以 NRI 插件预加载进 `slurmd` 的 shim 在作业里并不生效。作业里的 NVML 仍会报告节点的 profile，但如果作业直接去读 `/proc/driver/nvidia` 或 PCI sysfs，看到的就是真实文件；参见 [哪些容器会被注入](../../components/nri-plugin.md#which-containers-are-injected)。
 
 **作业不会真的执行 CUDA kernel。** 参见 [CUDA 不在模拟范围内](../../faq.md#can-i-run-cuda-workloads-against-mokka)。
 
@@ -186,7 +186,7 @@ kubectl -n slurm exec "$POD" -c slurmd -- ls /proc/driver/nvidia/gpus
 
 目录为空或不存在，说明 NRI 插件没有注入这个 Pod，或者 Mokka 版本低于 0.5.0。检查该节点上的 `nvml-mock` Pod 是否 Ready、其中的 `nvml-mock-nri` 容器是否在运行，然后删掉 `slurmd` Pod 让 operator 重建。NRI 只在容器创建那一刻做修改。
 
-**重装 Mokka 或切换配置档后，GPU 作业报 `Requested node configuration is not available`。** `slurmd` 只在启动时探测一次 GPU，而 `slurmctld` 会一直沿用节点首次注册时的 GPU–CPU 绑定关系，即便 `slurmd` 重启也不变。先删节点记录，再删 `slurmd` Pod，让每个节点重新注册一次：
+**重装 Mokka 或切换 profile 后，GPU 作业报 `Requested node configuration is not available`。** `slurmd` 只在启动时探测一次 GPU，而 `slurmctld` 会一直沿用节点首次注册时的 GPU–CPU 绑定关系，即便 `slurmd` 重启也不变。先删节点记录，再删 `slurmd` Pod，让每个节点重新注册一次：
 
 ```bash
 kubectl -n slurm exec slurm-controller-0 -c slurmctld -- \

@@ -1,87 +1,55 @@
 # control-plane
 
-The binary that runs the [Mokka control plane](../control-plane.md) and serves
-HTTP health probes. It reconciles declarative simulated GPU (sGPU) inventory
-through the Kubernetes API. The architecture page covers placement, Node
-projection, leader election and the [Stage 1 exclusions](../control-plane.md#stage-1-exclusions);
-this page describes the command line and probes.
+运行 [Mokka 控制面](../control-plane.md)并提供 HTTP 健康探针的二进制文件。它通过 Kubernetes API 协调声明式模拟 GPU（sGPU）资产清单。架构页面介绍部署位置、Node 投影、leader 选举和 [Stage 1 排除项](../control-plane.md#stage-1-exclusions)；本页描述命令行和探针。
 
-It is off by default: the chart renders a Deployment only when
-`controlPlane.enabled` is `true`.
+它默认关闭：只有当 `controlPlane.enabled` 为 `true` 时，chart 才会渲染 Deployment。
 
-## Kubernetes prerequisites
+## Kubernetes 前置条件
 
-The controller requires Kubernetes API access; there is no health-only or
-offline mode. Chart installations require Kubernetes 1.30+ for stable
-`ValidatingAdmissionPolicy`. Install the Mokka CustomResourceDefinitions (CRDs)
-before starting the controller; see [controller installation](../control-plane.md#install).
+该控制器需要 Kubernetes API 访问权限；没有仅健康检查模式或离线模式。通过 chart 安装需要 Kubernetes 1.30+ 以获得稳定的 `ValidatingAdmissionPolicy`。启动控制器前请先安装 Mokka 自定义资源定义（CRD）；参见[控制器安装](../control-plane.md#install)。
 
-In a cluster, the binary uses in-cluster configuration and a mounted
-ServiceAccount token. The chart provisions the controller's ServiceAccount and
-role-based access control (RBAC) permissions. Outside a cluster, pass
-`--kubeconfig` or set `MOKKA_CP_KUBECONFIG` to a kubeconfig file. Leaving that
-path empty uses in-cluster configuration, not `KUBECONFIG` or the default
-`~/.kube/config`.
+在集群中，二进制使用 in-cluster 配置和挂载的 ServiceAccount token。chart 会为控制器准备 ServiceAccount 和基于角色的访问控制（RBAC）权限。在集群外，传入 `--kubeconfig` 或把 `MOKKA_CP_KUBECONFIG` 设为 kubeconfig 文件路径。该路径留空时使用 in-cluster 配置，而不是 `KUBECONFIG` 或默认的 `~/.kube/config`。
 
-For a local process against a chart-managed installation, the kubeconfig must
-authenticate as the chart's controller ServiceAccount. Its admission policy
-restricts `SGPURack` creation and updates to that identity; RBAC permissions
-alone are not enough. Use the same leader-election namespace and Lease name as
-the deployed replicas so that only one process reconciles at a time. The Lease
-namespace must exist and the identity must have permission to get, create and
-update Leases there. The chart's [RBAC rules](https://github.com/NVIDIA/k8s-test-infra/blob/main/deployments/nvml-mock/helm/nvml-mock/templates/controlplane/rbac.yaml)
-define the required Node and Mokka resource permissions.
+对于针对 chart 所管理安装运行的本地进程，kubeconfig 必须以 chart 的控制器 ServiceAccount 身份认证。其准入策略把 `SGPURack` 的创建和更新限制为该身份，仅有 RBAC 权限并不够。请使用与已部署副本相同的 leader 选举命名空间和 Lease 名称，以便一次只有一个进程进行协调。Lease 命名空间必须存在，且该身份必须有在该命名空间 get、create 和 update Lease 的权限。chart 的 [RBAC 规则](https://github.com/NVIDIA/k8s-test-infra/blob/main/deployments/nvml-mock/helm/nvml-mock/templates/controlplane/rbac.yaml)定义了所需的 Node 和 Mokka 资源权限。
 
 ## Flags
 
-Flags with an environment variable listed below read it as a fallback; the
-flag wins when both are set. A dash means there is no environment-variable
-binding for that flag.
+下面列出了环境变量回退的 flag；两者都设置时以 flag 为准。短横线表示该 flag 没有环境变量绑定。
 
-| Flag | Environment variable | Default | Description |
+| Flag | 环境变量 | 默认值 | 说明 |
 |------|----------------------|---------|-------------|
-| `--feature-gates` | `MOKKA_FEATURE_GATES` | empty | Comma-separated `Name=true\|false` pairs. See [Feature Gates](../feature-gates.md) |
-| `--listen-addr` | `MOKKA_CP_LISTEN_ADDR` | `:8080` | Address for the HTTP probe server |
-| `--log-level` | `MOKKA_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error`. `warning` is an alias of `warn`; empty falls back to `info` |
-| `--log-format` | `MOKKA_LOG_FORMAT` | `json` | `json` or `plain`; empty falls back to `json` |
-| `--shutdown-timeout` | `MOKKA_CP_SHUTDOWN_TIMEOUT` | `5s` | Budget for in-flight HTTP requests to drain on SIGINT/SIGTERM |
-| `--kubeconfig` | `MOKKA_CP_KUBECONFIG` | empty | Path to a kubeconfig; empty uses in-cluster configuration |
-| `--leader-election-namespace` | `MOKKA_CP_LEADER_ELECTION_NAMESPACE` | `POD_NAMESPACE`, or `default` if empty | Namespace containing the leader-election Lease |
-| `--leader-election-name` | `MOKKA_CP_LEADER_ELECTION_NAME` | `control-plane.mokka.nvidia.com` | Name of the leader-election Lease |
-| `--leader-election-lease-duration` | — | `15s` | Lease duration before another replica can take over |
-| `--leader-election-renew-deadline` | — | `10s` | How long the leader retries renewing the Lease before giving up leadership |
-| `--leader-election-retry-period` | — | `2s` | Interval between leader-election attempts |
-| `--workers` | — | `2` | Workers per controller queue |
-| `--status-debounce` | — | `100ms` | Quiet period before an aggregate status update |
-| `--status-progress-interval` | — | `1s` | Maximum aggregate status staleness during continuous changes; zero uses the larger of `1s` and the debounce interval |
-| `--live-node-get-timeout` | `MOKKA_CP_LIVE_NODE_GET_TIMEOUT` | `2s` | Timeout for an exact Node GET after it leaves the filtered cache |
-| `--kube-api-qps` | — | `50` | Client-side Kubernetes API request rate limit |
-| `--kube-api-burst` | — | `100` | Client-side Kubernetes API request burst limit |
+| `--feature-gates` | `MOKKA_FEATURE_GATES` | 空 | 逗号分隔的 `Name=true\|false` 对。参见[特性门控](../feature-gates.md) |
+| `--listen-addr` | `MOKKA_CP_LISTEN_ADDR` | `:8080` | HTTP 探针服务监听地址 |
+| `--log-level` | `MOKKA_LOG_LEVEL` | `info` | `debug`、`info`、`warn` 或 `error`。`warning` 是 `warn` 的别名；空值回退到 `info` |
+| `--log-format` | `MOKKA_LOG_FORMAT` | `json` | `json` 或 `plain`；空值回退到 `json` |
+| `--shutdown-timeout` | `MOKKA_CP_SHUTDOWN_TIMEOUT` | `5s` | SIGINT/SIGTERM 时等待进行中 HTTP 请求排空的时间预算 |
+| `--kubeconfig` | `MOKKA_CP_KUBECONFIG` | 空 | kubeconfig 路径；空则使用 in-cluster 配置 |
+| `--leader-election-namespace` | `MOKKA_CP_LEADER_ELECTION_NAMESPACE` | `POD_NAMESPACE`，为空则 `default` | 存放 leader 选举 Lease 的命名空间 |
+| `--leader-election-name` | `MOKKA_CP_LEADER_ELECTION_NAME` | `control-plane.mokka.nvidia.com` | leader 选举 Lease 的名称 |
+| `--leader-election-lease-duration` | — | `15s` | 其他副本可以接管的 Lease 有效期 |
+| `--leader-election-renew-deadline` | — | `10s` | leader 在放弃领导权前重试续约 Lease 的时长 |
+| `--leader-election-retry-period` | — | `2s` | leader 选举尝试之间的间隔 |
+| `--workers` | — | `2` | 每个控制器队列的 worker 数 |
+| `--status-debounce` | — | `100ms` | 聚合状态更新前的静默期 |
+| `--status-progress-interval` | — | `1s` | 持续变化时聚合状态的最大陈旧时间；零表示取 `1s` 与去抖间隔中较大者 |
+| `--live-node-get-timeout` | `MOKKA_CP_LIVE_NODE_GET_TIMEOUT` | `2s` | Node 离开过滤缓存后执行精确 GET 的超时 |
+| `--kube-api-qps` | — | `50` | 客户端 Kubernetes API 请求速率限制 |
+| `--kube-api-burst` | — | `100` | 客户端 Kubernetes API 请求突发限制 |
 
-An unrecognized `--log-level` or `--log-format` fails startup rather than
-falling back silently. Workers, the live Node GET timeout, API QPS and burst
-must be positive; status intervals must be non-negative. A nonzero status
-progress interval must not be shorter than the debounce interval.
-Leader-election durations must satisfy `lease > renew > retry × 1.2` and be
-positive.
+无法识别的 `--log-level` 或 `--log-format` 会导致启动失败，而不是静默回退。worker 数、实时 Node GET 超时、API QPS 和 burst 必须为正；状态间隔必须非负。非零的状态进度间隔不得短于去抖间隔。Leader 选举时长必须满足 `lease > renew > retry × 1.2` 且为正值。
 
-## HTTP probes
+## HTTP 探针
 
-| Endpoint | Response |
+| 端点 | 响应 |
 |----------|----------|
-| `GET /healthz` | HTTP 200 with `{"ok":true}` while the HTTP server is serving; it does not check Kubernetes API access |
-| `GET /readyz` | HTTP 200 with `{"ok":true}` when the controller is ready; otherwise HTTP 503 with `{"ok":false,"reason":"controller is not ready"}` |
+| `GET /healthz` | HTTP 200，正文 `{"ok":true}`，表示 HTTP 服务正在工作；不检查 Kubernetes API 访问 |
+| `GET /readyz` | 控制器就绪时 HTTP 200、`{"ok":true}`；否则 HTTP 503、`{"ok":false,"reason":"controller is not ready"}` |
 
-Readiness follows the [controller's cache and leader-election state](../control-plane.md#observe-and-troubleshoot),
-not inventory convergence. A healthy HTTP listener alone does not make the
-replica ready.
+就绪状态跟随[控制器的缓存与 leader 选举状态](../control-plane.md#observe-and-troubleshoot)，而不是资产清单收敛。仅有健康的 HTTP 监听器并不能让副本就绪。
 
-## Usage
+## 用法
 
-For local development from the repository root, first prepare a kubeconfig
-satisfying the [Kubernetes prerequisites](#kubernetes-prerequisites). This
-example assumes the owning Helm release is in namespace `mokka` and uses the
-default Lease name:
+要在仓库根目录进行本地开发，先准备满足 [Kubernetes 前置条件](#kubernetes-prerequisites)的 kubeconfig。下面的例子假设所属 Helm release 位于 `mokka` 命名空间，并使用默认 Lease 名称：
 
 ```bash
 go run ./cmd/control-plane \
@@ -91,15 +59,14 @@ go run ./cmd/control-plane \
   --log-level debug
 ```
 
-In another terminal, inspect the probes (readiness may initially return 503):
+在另一个终端检查探针（就绪状态最初可能返回 503）：
 
 ```bash
 curl -i localhost:9090/healthz
 curl -i localhost:9090/readyz
 ```
 
-With default values, the chart renders these arguments. Kubernetes expands
-`$(POD_NAMESPACE)` to the pod's namespace:
+使用默认值时，chart 会渲染这些参数。Kubernetes 会把 `$(POD_NAMESPACE)` 展开为 Pod 所在命名空间：
 
 ```text
 /usr/local/bin/control-plane \
@@ -114,33 +81,20 @@ With default values, the chart renders these arguments. Kubernetes expands
   --kube-api-burst=100
 ```
 
-The chart takes these values from `controlPlane.service.port`,
-`controlPlane.logging.level`, `controlPlane.logging.format`,
-`controlPlane.shutdownTimeout`, `controlPlane.leaderElection.name`,
-`controlPlane.workers`, `controlPlane.kubeAPIQPS` and
-`controlPlane.kubeAPIBurst`. Other flags retain the binary defaults.
+这些值来自 chart 的 `controlPlane.service.port`、`controlPlane.logging.level`、`controlPlane.logging.format`、`controlPlane.shutdownTimeout`、`controlPlane.leaderElection.name`、`controlPlane.workers`、`controlPlane.kubeAPIQPS` 和 `controlPlane.kubeAPIBurst`。其他 flag 保留二进制默认值。
 
-!!! note "Give the drain room inside the grace period"
+!!! note "在宽限期内为排空留出空间"
 
-    Shutdown is a 10s preStop sleep — which keeps the endpoint out of Service
-    rotation before the process stops — followed by the drain. Both have to fit
-    inside `controlPlane.terminationGracePeriodSeconds`, 30s by default,
-    because the kubelet sends SIGKILL at that boundary whatever is still in
-    flight. `--shutdown-timeout` bounds HTTP draining, not controller cleanup;
-    follow the [safe disable and uninstall procedure](../control-plane.md#disable-or-uninstall-safely)
-    before removing the controller.
+    关闭流程先是 10 秒的 preStop 睡眠——在进程停止前让端点退出 Service 轮转——然后是排空。两者都必须落在 `controlPlane.terminationGracePeriodSeconds`（默认 30 秒）之内，因为到这个边界 kubelet 会发送 SIGKILL，无论还有多少请求在进行。`--shutdown-timeout` 只限制 HTTP 排空，不限制控制器清理；移除控制器之前请遵循[安全停用与卸载流程](../control-plane.md#disable-or-uninstall-safely)。
 
-## Deployment
+## 部署
 
-The image builds from `deployments/control-plane/Dockerfile` on
-`gcr.io/distroless/static-debian12:nonroot`, exposes port 8080, and uses
-`/readyz` and `/healthz` as its readiness and liveness probes.
+镜像基于 `gcr.io/distroless/static-debian12:nonroot`，从 `deployments/control-plane/Dockerfile` 构建，暴露 8080 端口，并使用 `/readyz` 和 `/healthz` 作为就绪与存活探针。
 
-For local work, `tilt up -- --control-plane` builds the image and installs the
-CRDs and chart with `controlPlane.enabled=true`.
+本地开发时，`tilt up -- --control-plane` 会构建镜像，并安装 CRD 和 `controlPlane.enabled=true` 的 chart。
 
-## See also
+## 另见
 
-- [Command-line tools](README.md)
-- [Mokka control plane](../control-plane.md) — architecture and lifecycle
-- [Installation](../helm-chart.md) — the nvml-mock chart
+- [命令行工具](README.md)
+- [Mokka 控制面](../control-plane.md)——架构与生命周期
+- [安装](../helm-chart.md)——nvml-mock chart

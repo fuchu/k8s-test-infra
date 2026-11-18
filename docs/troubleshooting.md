@@ -1,51 +1,42 @@
-# Troubleshooting
+# 排障
 
-Symptoms you are likely to hit running Mokka on a Kubernetes cluster, and what
-each one usually means.
+在 Kubernetes 集群上运行 Mokka 时可能遇到的症状，以及每种症状通常意味着什么。
 
-## First, get the mock to tell you what it is doing
+## 首先，让 mock 告诉你它在做什么
 
 ```bash
 MOCK_NVML_DEBUG=1 nvidia-smi
 ```
 
-Every NVML call the mock answers is traced, including which config it loaded and
-how many devices it built. Most of the questions below are answered by the first
-five lines of that output.
+mock 应答的每次 NVML 调用都会留下跟踪记录，包括它加载了哪份配置以及构建了多少设备。下面的大多数问题，答案都在这段输出的前五行里。
 
-## Kubernetes installs
+## Kubernetes 安装问题
 
-### `nvidia-smi` in a pod reports no GPUs
+### Pod 中的 `nvidia-smi` 报告没有 GPU
 
-Check the node actually has the staged tree, then that the pod can see it:
+先检查节点上是否真的有部署好的目录树，再检查 Pod 能否看到它：
 
 ```bash
 kubectl get pods -n mokka -l app.kubernetes.io/name=nvml-mock -o wide
 kubectl logs -n mokka -l app.kubernetes.io/name=nvml-mock --tail=50
 ```
 
-If the DaemonSet is not running on that node, it is usually the node selector:
-the chart pins to nodes labelled `mokka.nvidia.com/type=sgpu`.
+如果 DaemonSet 没有在该节点上运行，通常是节点选择器的问题：chart 固定到带有 `mokka.nvidia.com/type=sgpu` 标签的节点。
 
-### The device plugin reports 0 GPUs
+### device plugin 报告 0 块 GPU
 
-Two different causes, in the order worth checking:
+两种不同原因，按值得检查的顺序：
 
-1. **The mock files are not on the node.** Confirm the staged tree exists —
-   see [checking a node by hand](helm-chart.md#checking-a-node-by-hand).
-2. **The GPU Operator is trying to manage a real driver.** It must be installed
-   with `driver.enabled=false` and `toolkit.enabled=false`; there is no real
-   driver for it to manage.
+1. **mock 文件不在节点上。** 确认部署好的目录树存在——参见[手工检查节点](helm-chart.md#checking-a-node-by-hand)。
+2. **GPU Operator 试图管理真实驱动。** 必须用 `driver.enabled=false` 和 `toolkit.enabled=false` 安装它；这里没有真实驱动可供它管理。
 
 ```bash
 kubectl -n gpu-operator logs -l app=nvidia-device-plugin-daemonset | head -20
 ```
 
-### The GPU Operator validator crash-loops
+### GPU Operator validator 不断 crash-loop
 
-The validator is a statically linked Go binary with no shell, and it probes the
-driver root for expected files. A missing file in the staged tree looks like a
-crash loop rather than an error message.
+validator 是静态链接的 Go 二进制，没有 shell，它会探测驱动根目录中应有的文件。部署树中少一个文件，看起来就像 crash loop，而不是错误信息。
 
 ```bash
 NODE=$(docker ps --filter name=control-plane -q)
@@ -53,41 +44,32 @@ docker exec "$NODE" ls -la /run/nvidia/driver/usr/lib64/libnvidia-ml.so*
 docker exec "$NODE" cat /var/lib/nvml-mock/driver/config/config.yaml
 ```
 
-### CDI specs never appear in `/var/run/cdi`
+### CDI 规格从未出现在 `/var/run/cdi`
 
 ```bash
 kubectl logs -n mokka -l app.kubernetes.io/name=nvml-mock | grep -i cdi
 ```
 
-### The node pod is NotReady and `nvml-mock-nri` crash-loops
+### 节点 Pod 处于 NotReady，`nvml-mock-nri` 不断 crash-loop
 
 ```text
 nri-plugin: nri stub: failed to connect to NRI service: dial unix /var/run/nri/nri.sock: connect: no such file or directory
 ```
 
-containerd on that node has NRI off, the default in containerd 1.7. The node
-daemon turns NRI on as part of its
-[container runtime setup](components/node-daemon.md#container-runtime-setup),
-so here the setup is off, failed, left the node alone, or waits for a
-containerd restart under `restartMode: none`; the node agent's log says which.
-The node agent keeps running and workloads still start, but without the mock,
-and `helm install --wait` times out.
+该节点上的 containerd 关闭了 NRI——这是 containerd 1.7 的默认状态。节点守护进程会在其[容器运行时设置](components/node-daemon.md#container-runtime-setup)中打开 NRI，因此原因可能是：设置被关闭、设置失败、设置没有覆盖该节点，或是在 `restartMode: none` 下等待 containerd 重启；节点 agent 的日志会说明是哪一种。节点 agent 继续运行，工作负载仍会启动，但不带 mock，`helm install --wait` 会超时。
 
-Restart containerd if a restart is pending. Otherwise, set `nri.enabled=false`,
-or turn NRI on in containerd's configuration and restart containerd:
+如果有待处理的重启，请重启 containerd。否则，设置 `nri.enabled=false`，或在 containerd 配置中打开 NRI 并重启 containerd：
 
 ```toml
 [plugins."io.containerd.nri.v1.nri"]
   disable = false
 ```
 
-`containerd config dump | grep -A1 'io.containerd.nri.v1.nri'` on the node
-shows the setting containerd runs with.
+节点上的 `containerd config dump | grep -A1 'io.containerd.nri.v1.nri'` 显示 containerd 实际运行所用的设置。
 
-### Pods get no mock driver, or the node pod is not ready
+### Pod 得不到模拟驱动，或节点 Pod 不就绪
 
-The node daemon makes the `nvidia` runtime handler containerd's default, and its
-log says why when that fails or when it leaves the node's runtime alone:
+节点守护进程会把 `nvidia` 运行时 handler 设为 containerd 默认值，设置失败、或它决定不改动节点运行时时，其日志会说明原因：
 
 ```bash
 POD=$(kubectl -n mokka get pods -l app.kubernetes.io/name=nvml-mock \
@@ -95,65 +77,32 @@ POD=$(kubectl -n mokka get pods -l app.kubernetes.io/name=nvml-mock \
 kubectl -n mokka logs "$POD" -c node-agent | grep 'container runtime\|containerd'
 ```
 
-A `container runtime setup failed` line names the step that failed, for
-example `nvidia-ctk` failing to write the configuration, or containerd failing
-to restart with it. On the node, `crictl info` shows whether the running
-containerd has the handler as its default, and `journalctl -u containerd` shows
-why a restart failed. Until the setup succeeds, containers start under the
-node's own default handler without the mock driver, and a pod that sets
-`runtimeClassName: nvidia` cannot start. See
-[Container runtime setup](components/node-daemon.md#container-runtime-setup)
-for what the setup needs, how to remove it by hand, and how to turn it off.
+`container runtime setup failed` 这一行会指出失败的步骤，例如 `nvidia-ctk` 写配置失败，或 containerd 带着配置重启失败。在节点上，`crictl info` 显示运行中的 containerd 是否已把该 handler 设为默认，`journalctl -u containerd` 显示重启失败的原因。在设置成功之前，容器会在节点自身的默认 handler 下启动且不带模拟驱动，设置 `runtimeClassName: nvidia` 的 Pod 无法启动。设置需要什么、如何手工移除以及如何关闭，参见[容器运行时设置](components/node-daemon.md#container-runtime-setup)。
 
-### A pod gets no mock GPUs even though NRI is enabled
+### 启用了 NRI 但 Pod 得不到模拟 GPU
 
-First check that the pod is meant to receive GPUs. The plugin gives mock GPUs
-only to containers that hold a GPU allocation from the device plugin or the
-NVIDIA DRA driver, or whose pod carries the `nvml-mock.nvidia.com/devices:
-"true"` annotation. The `nvml-mock.nvidia.com/infiniband` and
-`nvml-mock.nvidia.com/imex-channels` annotations add only their own surface,
-never GPUs. A pod that requested no GPU and has no annotation is left untouched
-by design. A device plugin that runs without `--pass-device-specs=true` or the
-`cdi-cri` strategy leaves no allocation the plugin can recognise, so its pods
-also receive nothing.
+先检查这个 Pod 是否本应接收 GPU。插件只把模拟 GPU 给两类容器：持有来自 device plugin 或 NVIDIA DRA driver 的 GPU 分配的容器，或其 Pod 带有 `nvml-mock.nvidia.com/devices: "true"` 注解的容器。`nvml-mock.nvidia.com/infiniband` 和 `nvml-mock.nvidia.com/imex-channels` 注解只添加各自的接口面，绝不添加 GPU。没有请求 GPU 也没有注解的 Pod，按设计不会改动。device plugin 若没有 `--pass-device-specs=true` 或 `cdi-cri` 策略，就不会留下插件可识别的分配，因此它的 Pod 也得不到任何东西。
 
-The NRI plugin fails open: when it cannot inject, containers are created
-without the mock rather than failing. That makes a silent window possible, so
-check the plugin's probes rather than whether the process is alive — a plugin
-containerd has unregistered stays running and simply stops injecting.
+NRI 插件采用 fail-open：无法注入时，容器会在不带 mock 的情况下创建，而不是失败。这就可能出现无声的窗口，因此要检查插件的探针，而不是进程是否还活着——containerd 注销的插件会继续运行，只是不再注入。
 
 ```bash
 kubectl get pods -n mokka -l app.kubernetes.io/name=nvml-mock
 kubectl describe pod -n mokka -l app.kubernetes.io/name=nvml-mock | grep -A3 Readiness
 ```
 
-Injection is also skipped by design when the pod opts out or its namespace is
-excluded. See
-[NRI plugin failure modes](helm-chart.md#nri-plugin-failure-modes) and the
-[NRI Plugin](components/nri-plugin.md) page.
+Pod 显式退出或所在命名空间被排除时，注入也会按设计跳过。参见 [NRI 插件失败模式](helm-chart.md#nri-plugin-failure-modes)和 [NRI 插件](components/nri-plugin.md)页面。
 
-### A runtime change does not take effect
+### 运行时修改没有生效
 
-`nvml-mock-ctl` writes an override file that each loaded copy of the library
-re-reads on a TTL — about a second by default. Wait one interval and re-check.
+`nvml-mock-ctl` 写入一个覆盖文件，每个已加载的库副本按 TTL 重新读取它——默认约一秒。等待一个间隔再检查。
 
-If it never applies, confirm you targeted the right node: overrides are
-per-node files, so changing state on one node has no effect on a consumer
-running on another. See [Runtime Control](nvml-mock-ctl.md).
+如果始终不生效，确认你针对的是正确的节点：覆盖是逐节点文件，在一个节点上修改状态对运行在另一个节点上的消费者没有影响。参见[运行时控制](nvml-mock-ctl.md)。
 
-### Mounts pile up on a node with NRI enabled
+### 启用 NRI 的节点上挂载不断堆积
 
-Up to and including 0.4.1, an injected container that also had a
-`Bidirectional` volume, such as a DRA kubelet plugin or the GPU Operator's
-validator, copied the overlay's writable config bind onto the node. Each such
-container doubled the copies at `/var/lib/nvml-mock/driver/config`, and they
-stay after the pods are gone. A large stack slows container starts and anything
-else that reads the node's mount table. See
-[Mount propagation](components/nri-plugin.md#mount-propagation).
+在 0.4.1 及之前，注入的容器若同时带有 `Bidirectional` 卷，例如 DRA kubelet 插件或 GPU Operator 的 validator，就会把覆盖层中可写的配置绑定复制到节点上。每这样一个容器都会让 `/var/lib/nvml-mock/driver/config` 下的副本翻倍，并且 Pod 消失后副本仍在。大量副本会拖慢容器启动以及其他读取节点挂载表的操作。参见[挂载传播](components/nri-plugin.md#mount-propagation)。
 
-On a Kind cluster, count them in each node container. Kubernetes node names
-can differ from the container names, so list the containers with `kind`. A
-healthy node prints 0:
+在 Kind 集群上，可在每个节点容器中统计数量。Kubernetes 节点名可能与容器名不同，因此用 `kind` 列出容器。健康节点打印 0：
 
 ```bash
 for NODE in $(kind get nodes --name mokka); do
@@ -161,17 +110,9 @@ for NODE in $(kind get nodes --name mokka); do
 done
 ```
 
-To stay on 0.4.x without the growth, keep the plugin out of the namespace
-those pods run in, for example `--set 'nri.excludedNamespaces={gpu-operator}'`
-for the GPU Operator. Pods in an excluded namespace get no overlay, so leave
-out only namespaces whose pods do not need the node's GPU profile.
+要停留在 0.4.x 又不让副本增长，请让插件避开那些 Pod 所在的命名空间，例如 GPU Operator 用 `--set 'nri.excludedNamespaces={gpu-operator}'`。排除后，这些命名空间中的 Pod 得不到覆盖层，因此只排除那些 Pod 不需要节点 GPU profile 的命名空间。
 
-Upgrading stops the growth but leaves the copies in place. Rebooting the node
-clears them; on Kind, recreate the cluster. To clear them in place, first make
-sure no container injected before the upgrade still runs on the node:
-unmounting the copies takes its writable config directory with it, and its
-writes then fail as read-only. Then unmount them until none is left. A node
-without copies is left as it is, and a node whose unmount fails is named:
+升级会停止增长，但不会清除已有副本。重启节点会清掉它们；在 Kind 上则重建集群。要就地清除，先确认升级前注入的容器都不再运行在该节点上：卸载副本会带走其可写配置目录，之后的写入会因只读而失败。然后反复卸载直到没有剩余。没有副本的节点保持原样，卸载失败的节点会被点名：
 
 ```bash
 for NODE in $(kind get nodes --name mokka); do
@@ -180,19 +121,15 @@ for NODE in $(kind get nodes --name mokka); do
 done
 ```
 
-### `kind load docker-image` fails with "content digest not found"
+### `kind load docker-image` 报 "content digest not found"
 
 ```text
 ctr: content digest sha256:...: not found
 ```
 
-`ghcr.io/nvidia/nvml-mock` is a multi-arch image. Docker Desktop's containerd
-image store keeps the whole manifest list, and `kind load docker-image` hands
-the node an archive whose per-platform layers it does not have. The error names
-the digest, not the cause. This is the default Docker Desktop configuration on
-macOS.
+`ghcr.io/nvidia/nvml-mock` 是多架构镜像。Docker Desktop 的 containerd 镜像仓库保留整个 manifest 列表，而 `kind load docker-image` 交给节点的归档缺少对应平台的层。错误信息点出的是摘要，而不是原因。这是 macOS 上 Docker Desktop 的默认配置。
 
-Save a single platform and load the archive instead:
+改为只保存单一平台并加载该归档：
 
 ```bash
 ARCH=$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')
@@ -200,87 +137,71 @@ docker save --platform "linux/${ARCH}" ghcr.io/nvidia/nvml-mock:latest -o nvml-m
 kind load image-archive nvml-mock.tar --name <cluster>
 ```
 
-The platform must match the kind node's architecture. A locally built image is
-single-arch already and loads unchanged.
+平台必须与 kind 节点的架构一致。本地构建的镜像已经是单架构，可直接加载。
 
-### A profile value does not show up in `nvidia-smi`
+### 某个 profile 取值没有出现在 `nvidia-smi` 中
 
-Confirm the profile was loaded at all — `MOCK_NVML_DEBUG=1 nvidia-smi` names the
-config and the device count in its first lines. If it was, the value is being
-set at a different level: per-device settings override `device_defaults`, and a
-runtime override beats both. [Configuration](configuration.md) documents the
-precedence.
+先确认 profile 到底有没有加载——`MOCK_NVML_DEBUG=1 nvidia-smi` 的前几行会点出配置和设备数量。如果加载了，说明该值设在另一个层级：逐设备设置覆盖 `device_defaults`，而运行时覆盖又高于两者。[配置参考](configuration.md)记录了优先级。
 
-If the profile itself is not loading, the ConfigMap is usually the cause:
+如果 profile 本身没加载，通常是 ConfigMap 的问题：
 
 ```bash
 kubectl get configmap -n mokka -l app.kubernetes.io/name=nvml-mock
 kubectl logs -n mokka -l app.kubernetes.io/name=nvml-mock | grep -i config
 ```
 
-### Fields show `N/A` or return `NOT_SUPPORTED`
+### 字段显示 `N/A` 或返回 `NOT_SUPPORTED`
 
-The mock answers from configuration, so a field the profile does not set is
-genuinely not supported — the same answer an older real driver gives. Add the
-value to the profile and `helm upgrade`.
+mock 根据配置应答，因此 profile 未设置的字段确实是不支持的——与较旧的真实驱动给出同样的答案。把值加入 profile 并 `helm upgrade`。
 
-A handful of NVML functions are generated stubs that always return
-`NOT_SUPPORTED`. [Libraries and Shims](components/libraries-and-shims.md) explains which and
-why; [Contributing](contributing/index.md) covers implementing one.
+有少数 NVML 函数是生成的桩，总是返回 `NOT_SUPPORTED`。[库与 Shims](components/libraries-and-shims.md)解释哪些以及为什么；[贡献指南](contributing/index.md)介绍如何实现一个。
 
-### `nvidia-smi` segfaults or a symbol is missing
+### `nvidia-smi` 段错误或符号缺失
 
-Both mean the image predates the call being made. Confirm the node is running
-the image you think it is:
+两者都意味着镜像比调用的那个函数更旧。确认节点运行的是你以为的镜像：
 
 ```bash
 kubectl get daemonset -n mokka -o jsonpath='{.items[*].spec.template.spec.containers[*].image}'
 ```
 
-Run with `MOCK_NVML_DEBUG=1` to find which call is involved before filing a bug.
+提交 bug 前，用 `MOCK_NVML_DEBUG=1` 运行以找出涉及哪个调用。
 
-## Running the library outside Kubernetes
+## 在 Kubernetes 之外运行库
 
-Building `libnvidia-ml.so` and running a binary against it with
-`LD_LIBRARY_PATH` is the contributor workflow — see
-[Contributing](contributing/index.md) for building it and
-[Local Development](contributing/local-development.md) for the Tilt loop.
+构建 `libnvidia-ml.so` 并用 `LD_LIBRARY_PATH` 针对它运行二进制，是贡献者的工作流——构建方法见[贡献指南](contributing/index.md)，Tilt 循环见[本地开发](contributing/local-development.md)。
 
-One failure is specific to that path and worth knowing: if the real NVML loads
-despite `LD_LIBRARY_PATH`, something else is winning the search order.
+有一条失败是这条路径特有的，值得了解：如果真实 NVML 在 `LD_LIBRARY_PATH` 存在的情况下仍然加载，说明搜索顺序中有别的东西胜出。
 
 ```bash
-LD_DEBUG=libs nvidia-smi 2>&1 | grep nvml   # what actually resolved
-grep nvml /etc/ld.so.conf.d/*               # an ld.so entry can outrank your path
+LD_DEBUG=libs nvidia-smi 2>&1 | grep nvml   # 实际解析到了什么
+grep nvml /etc/ld.so.conf.d/*               # 某个 ld.so 条目可能优先于你的路径
 ```
 
-An absolute path is more reliable than a relative one.
+绝对路径比相对路径可靠。
 
-## Still stuck
+## 仍然卡住
 
-Pick the route that matches the problem — blank issues are disabled, so the
-tracker expects one of these:
+选择与问题相符的渠道——tracker 禁用空白 issue，因此期望以下之一：
 
-| Problem | Where |
+| 问题 | 去哪里 |
 |---|---|
-| Mokka behaves incorrectly | [Bug report](https://github.com/NVIDIA/k8s-test-infra/issues/new?template=bug_report.yml) |
-| Something on this site is wrong or missing | [Documentation correction](https://github.com/NVIDIA/k8s-test-infra/issues/new?template=documentation.yml) |
-| You want Mokka to do something it does not | [Feature request](https://github.com/NVIDIA/k8s-test-infra/issues/new?template=feature_request.yml) |
-| "How do I…?" | [Discussions](https://github.com/NVIDIA/k8s-test-infra/discussions) — the tracker is for tracked work |
+| Mokka 行为不正确 | [Bug 报告](https://github.com/NVIDIA/k8s-test-infra/issues/new?template=bug_report.yml) |
+| 本站某处有误或缺失 | [文档修正](https://github.com/NVIDIA/k8s-test-infra/issues/new?template=documentation.yml) |
+| 你希望 Mokka 做它还不会做的事 | [特性请求](https://github.com/NVIDIA/k8s-test-infra/issues/new?template=feature_request.yml) |
+| "我该怎么做……？" | [Discussions](https://github.com/NVIDIA/k8s-test-infra/discussions)——tracker 用于跟踪工作项 |
 
-!!! warning "Never open a public issue for a security vulnerability"
-    Report it privately instead. See the
-    [security policy](https://github.com/NVIDIA/k8s-test-infra/blob/main/SECURITY.md).
+!!! warning "绝不要为安全漏洞开公开 issue"
+    请私下报告。参见[安全策略](https://github.com/NVIDIA/k8s-test-infra/blob/main/SECURITY.md)。
 
-### What to include in a bug report
+### bug 报告应包含什么
 
-What you ran, what you expected, what happened, and:
+你运行了什么、期望什么、发生了什么，以及：
 
 ```bash
-helm list -n mokka                      # chart version and the profile in use
+helm list -n mokka                      # chart 版本和所用 profile
 kubectl get pods -n mokka -o wide
 kubectl logs -n mokka -l app.kubernetes.io/name=nvml-mock --tail=100
 kubectl get nodes --show-labels
 ```
 
-Plus `MOCK_NVML_DEBUG=1 nvidia-smi 2>&1 | head -40` from inside an affected pod.
+再加上受影响的 Pod 内部执行的 `MOCK_NVML_DEBUG=1 nvidia-smi 2>&1 | head -40`。

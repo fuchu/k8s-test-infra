@@ -1,313 +1,120 @@
-# Repository automation
+# 仓库自动化
 
-This repository uses one packaged JavaScript action for repository policy. The
-workflows use trusted code and policy from the default branch. They do not run
-code from a pull request head with a write token.
+本仓库使用一个打包的 JavaScript action 来处理仓库策略。工作流使用来自默认分支的可信代码和策略，不会以写权限 token 运行来自 pull request 头部的代码。
 
-## Supported foundation
+## 支持的基础功能
 
-The foundation provides these functions:
+该基础提供以下功能：
 
-1. Additive label synchronization from `.github/repo-automation/labels.yml`.
-2. Pull request metadata and reviewer reconciliation.
-3. Guarded `/lgtm`, `/approve`, `/hold`, `/unhold`, and `/retest` commands.
-4. Review-change observation.
-5. A stable `repository-automation/merge-policy` check, guarded GitHub native
-   SQUASH auto-merge enablement, and unsafe auto-merge disarm.
-6. Conflict labels and metadata label repair for all open pull requests,
-   including older requests and requests based on another feature branch.
-7. Labels-only policy evaluation for a merge controller outside this action.
+1. 从 `.github/repo-automation/labels.yml` 进行增量标签同步。
+2. Pull request 元数据与评审者协调。
+3. 受保护的 `/lgtm`、`/approve`、`/hold`、`/unhold` 和 `/retest` 命令。
+4. 评审变更观察。
+5. 一个稳定的 `repository-automation/merge-policy` 检查、受保护的 GitHub 原生 SQUASH 自动合并启用，以及不安全自动合并的解除。
+6. 为所有未关闭的 pull request 修复冲突标签和元数据标签，包括较旧的 request 和基于其他 feature 分支的 request。
+7. 为本 action 之外的合并控制器提供仅标签的策略评估。
 
-The foundation does not install Prow or Tide. GitHub branch protection remains
-the final merge authority. The automation publishes its policy check, enables
-native SQUASH auto-merge for eligible pull requests, and disables unsafe native
-auto-merge requests. It does not call a direct merge endpoint.
+该基础不安装 Prow 或 Tide。GitHub 分支保护仍是最终的合并权威。自动化发布其策略检查、为符合条件的 pull request 启用原生 SQUASH 自动合并，并禁用不安全的原生自动合并请求，但不会调用直接合并端点。
 
-## Cherry-pick and backport
+## Cherry-pick 与 backport
 
-`/cherry-pick` and `/backport` are not commands. The project fixes forward
-from `main` and keeps no release branches, so the action reports either one as
-unsupported, like any other unknown command.
+`/cherry-pick` 和 `/backport` 不是命令。项目只从 `main` 向前修复，不保留发布分支，因此 action 会把它们中的任一个报告为不支持，与其他未知命令一样。
 
-## Assignment, review request, state, and title commands
+## 指派、评审请求、状态与标题命令
 
-`/assign`, `/unassign`, `/cc`, `/uncc`, `/close`, `/reopen`, and `/retitle`
-belong to the Mokka agent, not to this action. The action skips a line whose
-command name is exactly one of these, followed by a space, a tab, or the end of
-the line, whatever its arguments: it records no command, reports no diagnostic,
-and makes no write, and a review body is evaluated as if the line were absent.
-The parser's line checks run first, so such a line longer than 4096
-characters, or with a control character other than tab, a format character, or
-a line or paragraph separator, is still reported, and like any diagnostic it
-keeps a review `/lgtm` beside it from counting.
+`/assign`、`/unassign`、`/cc`、`/uncc`、`/close`、`/reopen` 和 `/retitle` 属于 Mokka agent，而不属于本 action。对于命令名恰好是其中之一、后跟空格、制表符或行尾的行，无论参数如何，action 都会跳过：不记录命令、不报告诊断、不做任何写入，评估评审正文时如同该行不存在。解析器的行检查先执行，因此这样的行如果超过 4096 个字符，或含有制表符以外的控制字符、格式字符、行或段落分隔符，仍会被报告；和任何诊断一样，这会使同一评审中的 `/lgtm` 不计入。
 
-The agent reads these comments on issues and pull requests, applies Prow's
-rules for who may use each command, and dispatches
-`.github/workflows/issue-commands.yml` from `main` with these five string
-inputs, always all five, with an empty string for the ones a command does not
-use:
+agent 会在 issue 和 pull request 上读取这些评论，应用 Prow 关于谁可以使用每个命令的规则，并从 `main` 派发 `.github/workflows/issue-commands.yml`。派发时始终带上以下五个字符串输入；命令不使用的输入传空字符串：
 
-| Input | Value |
+| 输入 | 值 |
 |---|---|
-| `command` | `assign`, `unassign`, `cc`, `uncc`, `close`, `reopen`, or `retitle` |
-| `number` | The issue or pull request number |
-| `users` | Comma-separated GitHub logins without `@`, at most 10. Required for `assign`, `unassign`, `cc`, and `uncc`; refused for the other commands |
-| `title` | The new title, for `retitle` only: at most 256 characters, no control or format characters, and no keyword that closes an issue, such as `fixes #12` |
-| `requester` | The commenter's login, shown in the run name |
+| `command` | `assign`、`unassign`、`cc`、`uncc`、`close`、`reopen` 或 `retitle` |
+| `number` | issue 或 pull request 编号 |
+| `users` | 以逗号分隔、不带 `@` 的 GitHub 登录名，最多 10 个。`assign`、`unassign`、`cc` 和 `uncc` 必需；其他命令拒绝 |
+| `title` | 新标题，仅限 `retitle`：最多 256 个字符，无控制或格式字符，且不含会关闭 issue 的关键字，如 `fixes #12` |
+| `requester` | 评论者的登录名，显示在 run 名称中 |
 
-The workflow decides nothing about who may use a command: anyone who can
-dispatch it already has write access. It checks the inputs, then makes the
-change with the calls Prow's GitHub client makes:
+工作流不决定谁可以使用命令：能派发它的任何人都已有写权限。它会检查输入，然后用 Prow 的 GitHub 客户端所用的调用做出更改：
 
-- `assign` and `unassign` add or remove assignees. GitHub silently skips a
-  user it cannot assign, so the workflow compares the assignees GitHub returns.
-- `cc` and `uncc` request or remove pull request reviews. GitHub refuses a
-  whole review request for one reviewer it cannot request, so the workflow then
-  requests each reviewer alone. Both are refused on an issue.
-- `close` closes an issue as completed, or closes a pull request, and is
-  refused on an item that is already closed. `reopen` reopens either, except a
-  merged pull request, and does nothing on an item that is not closed.
-- `retitle` sets the title.
+- `assign` 和 `unassign` 添加或移除指派人。GitHub 会静默跳过它无法指派的用户，因此工作流会比对 GitHub 返回的指派人。
+- `cc` 和 `uncc` 请求或移除 pull request 评审。GitHub 会因一个无法请求的评审者而拒绝整个评审请求，因此工作流随后会逐个请求每位评审者。两者在 issue 上都会被拒绝。
+- `close` 以完成状态关闭 issue，或关闭 pull request，对已关闭的项会被拒绝。`reopen` 重新打开两者，但已合并的 pull request 除外，对未关闭的项什么也不做。
+- `retitle` 设置标题。
 
-After a successful `close` or `reopen`, the workflow posts the reply Prow's
-lifecycle plugin posts, naming the requester, for example
-`@alice: Closing this issue.` The other commands post nothing on success, as
-in Prow.
+`close` 或 `reopen` 成功后，工作流会发布 Prow 生命周期插件所发布的回复，点名请求者，例如 `@alice: Closing this issue.`。其他命令成功时不发布任何内容，与 Prow 一致。
 
-When a command is refused, by one of the rules above or by GitHub with HTTP
-403, 404, 410, or 422 or by leaving a user out, the workflow posts one comment
-on the issue or pull request that names the command and the reason, and fails
-the run. Inputs that fail validation get the same comment whenever `number` is
-a positive integer: it names the rule, never repeats a title, and shows a
-rejected login in a code span. An invalid `number`, or any other error, fails
-the run without a comment.
+命令可能被上述规则之一拒绝，也可能被 GitHub 以 HTTP 403、404、410、422 拒绝，或因遗漏用户而拒绝。此时，工作流会在 issue 或 pull request 上发布一条评论，点明命令和原因，并让 run 失败。验证失败的输入，只要 `number` 是正整数，也会得到同样的评论：评论点明规则，绝不重复标题，并在代码片段中显示被拒绝的登录名。无效的 `number` 或任何其他错误会让 run 失败但不发布评论。
 
-The job runs only when `REPOSITORY_AUTOMATION_ISSUE_COMMANDS_ENABLED` is
-`true`; until the agent dispatches the workflow, it does nothing. Each run is
-its own concurrency group, because GitHub keeps one pending run per group and
-a shared group would drop a dispatched command.
+该 job 仅在 `REPOSITORY_AUTOMATION_ISSUE_COMMANDS_ENABLED` 为 `true` 时运行；在 agent 派发该工作流之前，它什么也不做。每次运行都是各自的并发组，因为 GitHub 每组只保留一个待处理 run，共享组会丢弃被派发的命令。
 
-## Activation order
+## 激活顺序
 
-Write-capable jobs are disabled when they first land. Enable a stage by setting
-its repository variable to the exact lowercase string `true`. An unset variable
-or any other value keeps the job disabled.
+具备写权限的 job 在首次落地时是禁用的。把某个阶段的仓库变量设为精确的小写字符串 `true` 即可启用该阶段。未设置的变量或任何其他值都会使 job 保持禁用。
 
-Activate the functions in this order:
+按以下顺序激活功能：
 
-1. Run **Label synchronization** without `apply`. Review the plan. Run it again
-   with `apply` only after the plan is correct.
-2. Set `REPOSITORY_AUTOMATION_METADATA_ENABLED=true`. Confirm that **PR
-   metadata** changes only managed metadata labels and reviewer requests.
-3. Set `REPOSITORY_AUTOMATION_COMMANDS_ENABLED=true`. Confirm command
-   authorization and duplicate-delivery behavior on a test pull request.
-4. Set `REPOSITORY_AUTOMATION_REVIEWS_ENABLED=true`. Confirm that **Merge
-   evaluation** receives only the expected completion events and keeps its job
-   disabled.
-5. Add `repository-automation/merge-policy` as a required branch-protection
-   check. Only then set `REPOSITORY_AUTOMATION_MERGE_ENABLED=true` to publish
-   policy checks, enable native SQUASH auto-merge for eligible pull requests,
-   and disarm unsafe native auto-merge requests. This flag applies to all open
-   requests selected by events, trusted dispatch completion, and the scheduled
-   evaluator; it is not limited to a test PR. For strict SQUASH-only operation,
-   repository settings
-   must disable merge commits and rebase merges. The evaluator leaves an
-   eligible SQUASH request armed and enables an eligible unarmed request. It
-   disarms an unsafe method that it observes, but the method can change after
-   its final read. If this flag is already enabled, installing this action
-   also activates native enablement.
+1. 不带 `apply` 运行**标签同步**。审阅计划。仅在计划正确后，带 `apply` 再运行一次。
+2. 设置 `REPOSITORY_AUTOMATION_METADATA_ENABLED=true`。确认 **PR 元数据**只更改受管理的元数据标签和评审者请求。
+3. 设置 `REPOSITORY_AUTOMATION_COMMANDS_ENABLED=true`。在一个测试 pull request 上确认命令授权和重复派发行为。
+4. 设置 `REPOSITORY_AUTOMATION_REVIEWS_ENABLED=true`。确认**合并评估**只收到预期的完成事件，并保持其 job 禁用。
+5. 把 `repository-automation/merge-policy` 添加为必需的分支保护检查。只有到这时才设置 `REPOSITORY_AUTOMATION_MERGE_ENABLED=true`，以发布策略检查、为符合条件的 pull request 启用原生 SQUASH 自动合并、解除不安全的原生自动合并请求。此标志适用于事件、可信派发完成和定时评估器所选的所有未关闭 request，不限于测试 PR。对于严格的仅限 SQUASH 操作，仓库设置必须禁用合并提交和 rebase 合并。评估器会让符合条件的 SQUASH request 保持已启用，并启用那些符合条件的未启用 request。它会解除其观察到的不安全方法，但该方法可能在其最后一次读取之后改变。如果此标志已经启用，安装本 action 也会激活原生启用。
 
-   If **Retire merge-policy check** has run, open heads carry a neutral
-   `repository-automation/merge-policy` run, and GitHub counts neutral as
-   passing a required check. When you return to this gate from another
-   controller, keep that controller's check required next to this one until
-   the latest `repository-automation/merge-policy` run on every open head is
-   `success` or `action_required` (the evaluator never posts `neutral`).
-   Dispatch **Merge evaluation** with an empty `pr_number` and `dry_run` off
-   to post them, and only then remove the other controller's check.
-6. Set `REPOSITORY_AUTOMATION_ISSUE_COMMANDS_ENABLED=true` once the Mokka
-   agent dispatches **Issue commands**. Confirm an `/assign` and a `/retitle`
-   on a test issue or pull request.
+   如果**退役 merge-policy 检查**已运行，打开的头部会带上中性的 `repository-automation/merge-policy` run，而 GitHub 把中性视为必需检查通过。当你从另一个控制器回到此关卡时，要让那个控制器的检查与此检查一起保持必需，直到每个打开头部上最新的 `repository-automation/merge-policy` run 为 `success` 或 `action_required`（评估器从不发布 `neutral`）。以空的 `pr_number` 且关闭 `dry_run` 派发**合并评估**来发布它们，然后才移除另一个控制器的检查。
+6. 在 Mokka agent 派发**问题命令**后，设置 `REPOSITORY_AUTOMATION_ISSUE_COMMANDS_ENABLED=true`。在一个测试 issue 或 pull request 上确认一个 `/assign` 和一个 `/retitle`。
 
-Keep each earlier step active while you validate the next step. Do not enable a
-later write path when an earlier validation fails.
+验证下一步时，让每一步早先的步骤保持激活。当前一步的验证失败时，不要启用更后面的写入路径。
 
-To hand the merge to another controller, follow the cutover in
-[Labels-only policy evaluation](#labels-only-policy-evaluation).
+要把合并交给另一个控制器，请遵循[仅标签的策略评估](#labels-only-policy-evaluation)中的切换步骤。
 
-## Labels for all open pull requests
+## 所有未关闭 pull request 的标签
 
-With `REPOSITORY_AUTOMATION_METADATA_ENABLED=true`, **PR metadata** scans all
-open pull requests hourly, at minute 17. GitHub can delay scheduled runs. There is
-no creation-date or update-date filter. A push to `main` also scans open
-requests based on `main`. The scheduled scan covers every valid base branch in
-this repository, including stacked pull requests and PRs created by bots.
+在 `REPOSITORY_AUTOMATION_METADATA_ENABLED=true` 时，**PR 元数据**每小时在第 17 分钟扫描所有未关闭的 pull request。GitHub 可能延迟定时任务。没有创建日期或更新日期过滤。推送到 `main` 也会扫描基于 `main` 的未关闭 request。定时扫描覆盖本仓库中每个有效的基分支，包括堆叠的 pull request 和由机器人创建的 PR。
 
-The conflict scan adds `needs-rebase` only when GitHub reports `CONFLICTING` for
-the current head and base tip. It removes that label only when GitHub reports
-`MERGEABLE`. Unknown mergeability, a missing base, inconsistent identity, or a
-changed head or base tip defers the request and preserves its labels.
-PR branch updates (`synchronize`) also trigger this scan. The event's `before`
-and `after` SHAs do not replace the live head, base tip, or mergeability checks.
+冲突扫描仅在 GitHub 对当前头部和基分支尖端报告 `CONFLICTING` 时添加 `needs-rebase`。仅当 GitHub 报告 `MERGEABLE` 时移除该标签。未知的合并性、缺失的基分支、身份不一致，或头部或基分支尖端改变，都会推迟该 request 并保留其标签。PR 分支更新（`synchronize`）也会触发此扫描。事件的 `before` 和 `after` SHA 不会取代实时的头部、基分支尖端或合并性检查。
 
-The metadata scan repairs `kind/*`, `size/*`, `area/*`, and
-`do-not-merge/work-in-progress`. It uses the same classifiers as PR metadata.
-An invalid title preserves existing kind labels; size, area, and draft labels
-can still be repaired. Invalid configuration preserves all existing labels.
-The scan refreshes the trusted policy comment even when labels already match.
-It validates configuration, title, DCO, and OWNERS before it emits current-head
-metadata evidence. Failed validation removes that evidence and records the
-diagnostics. It does not request reviewers. It preserves conflict,
-approval, hold, and other labels outside its metadata ownership.
+元数据扫描修复 `kind/*`、`size/*`、`area/*` 和 `do-not-merge/work-in-progress`，使用与 PR 元数据相同的分类器。无效的标题会保留现有 kind 标签，但 size、area 和 draft 标签仍可被修复；无效的配置则会保留所有现有标签。即使标签已经匹配，扫描也会刷新可信策略评论。在发出当前头部元数据证据之前，扫描会验证配置、标题、DCO 和 OWNERS；验证失败会移除该证据并记录诊断。扫描不请求评审者，并保留冲突、批准、hold 以及不属于其元数据所有权范围的其他标签。
 
-The refresh preserves valid command state, including a hold, from the same
-trusted bot comment. Duplicate comments, invalid state, or a changed comment
-stop the refresh. The API has no atomic compare-and-swap for comments.
-Commands and pull request metadata runs for the same pull request share one
-concurrency group, so they never rewrite its comment at the same time. Scans
-run in their own group, and only the final comment read limits their
-read-to-write race with a concurrent command.
+刷新会保留来自同一可信机器人评论的有效命令状态，包括 hold。重复评论、无效状态或评论被更改都会停止刷新。API 对评论没有原子 compare-and-swap。同一 pull request 的命令和元数据 run 共享一个并发组，因此它们绝不会同时重写其评论。扫描在自己的组中运行；它们与并发命令之间的读后写竞态，仅受最后一次评论读取的限制。
 
-Both scans fully read their candidate list before the first mutation and
-reject a list above 100 requests instead of silently omitting requests. They
-repeat live identity checks before each write. Metadata also checks the base
-tip, derived labels, and the exact trusted policy revision. The job summary
-records each request as applied, unchanged, deferred, or failed. Each scan also
-logs the same bounded JSON with the prefix `Repository automation conflict-labels: `
-or `Repository automation metadata-labels: `. These reports can be read through
-the job-log API. A later API failure reports earlier writes; it does not claim
-that they were rolled back. Review both reports and the current open list before
-declaring a sweep complete. Investigate every deferred, failed, or missing request.
+两次扫描都会在第一次变更之前完整读取其候选列表，并拒绝超过 100 个 request 的列表，而不是静默遗漏。每次写入前，它们都会重复实时身份检查；元数据还会检查基分支尖端、派生标签和确切的可信策略修订。job 摘要把每个 request 记录为已应用、未更改、已推迟或失败。每次扫描还会记录同样有界的 JSON，前缀为 `Repository automation conflict-labels: ` 或 `Repository automation metadata-labels: `，可通过 job 日志 API 读取。之后的 API 失败会报告早先的写入，但不会声称它们已被回滚。在宣布一次清扫完成之前，请审阅两份报告和当前未关闭列表，调查每一个被推迟、失败或缺失的 request。
 
-An initially correct metadata label set still needs fresh evidence and input
-checks. The scan verifies the stored comment and final labels, then repeats its
-live input checks. If a successful label update is still absent at the next read, the scan stops and
-reports the partial result instead of repeating the same update. The hourly
-schedule limits routine API use; the workflow token's actual rate limit is
-not assumed. A large first backfill can require another run after an API
-failure. Check the per-PR results before retrying.
+起初正确的元数据标签集仍需要新鲜的证据和输入检查。扫描会验证存储的评论和最终标签，然后重复其实时输入检查。如果下次读取时仍然缺少一次成功的标签更新，扫描会停止并报告部分结果，而不是重复同样的更新。每小时的定时限制了常规 API 使用，且不会假设工作流 token 的实际速率上限。大规模的首次回填可能需要 API 失败后再运行一次。重试前请检查每个 PR 的结果。
 
-Approval labels remain part of the guarded merge evaluator. They require its
-activation gates and current validated human review, command evidence, or
-applicable approver-author authority from trusted OWNERS. A
-metadata backfill does not directly grant approval or enable auto-merge.
+批准标签仍是受保护合并评估器的一部分。它们需要其激活关卡以及当前经过验证的人工评审、命令证据，或来自可信 OWNERS 的适用 approver-author 权威。元数据回填不会直接授予批准或启用自动合并。
 
-Completion of a trusted **PR metadata** dispatch triggers the guarded merge
-evaluator for the bounded open pull request set. The evaluator reads current
-reviews, metadata, and source CI before it sets approval labels and the
-merge-policy check. With the merge flag enabled, an eligible request can also
-receive native SQUASH auto-merge.
+可信 **PR 元数据**派发的完成会为有界的未关闭 pull request 集合触发受保护的合并评估器。评估器在设置批准标签和 merge-policy 检查之前，会读取当前评审、元数据和源 CI。在合并标志启用时，符合条件的 request 还可能获得原生 SQUASH 自动合并。
 
-The evaluator accepts only canonical v2 metadata evidence with an explicit
-successful validation result. It rejects legacy or ambiguous evidence and
-checks the live title and DCO against the checked-out policy. The exact trusted
-checkout revision must match the live default branch before and after each
-policy evaluation. A revision change blocks the merge policy and disarms native
-auto-merge on the same head when possible. The final read of a confirmed
-exact-head completed native merge needs no new policy evaluation and performs
-no further writes.
+评估器只接受带有明确成功验证结果的规范 v2 元数据证据。它拒绝遗留或含糊的证据，并根据签出的策略检查实时标题和 DCO。在每次策略评估前后，确切的可信签出修订必须与实时默认分支匹配。修订变更会阻止合并策略，并在可能时解除同一头部上的原生自动合并。对于已确认的精确头部，若原生合并已完成，则最后一次读取不需要新的策略评估，也不执行进一步的写入。
 
-A trusted **Review observer** completion normally evaluates its mapped pull
-requests. If GitHub returns a valid empty PR mapping, the evaluator reads the
-current open PR list, limited to 100 candidates. It checks each candidate's
-current review and head before it changes approval labels or the merge-policy
-check. Invalid workflow identity or malformed mappings do not start this scan.
+可信的**评审观察器**完成通常会评估其映射的 pull request。如果 GitHub 返回有效的空 PR 映射，评估器会读取当前未关闭的 PR 列表，限制为 100 个候选。在更改批准标签或 merge-policy 检查之前，它会检查每个候选的当前评审和头部。无效的工作流身份或格式错误的映射不会启动此扫描。
 
-### Native SQUASH auto-merge and source CI
+### 原生 SQUASH 自动合并与源 CI
 
-The trusted evaluator job enables GitHub native auto-merge with SQUASH. Its
-token has `contents: write` and `pull-requests: write` permissions for this
-operation. It checks out only the trusted default-branch commit, with checkout
-credentials disabled.
+可信评估器 job 启用 GitHub 原生 SQUASH 自动合并。其 token 为此操作拥有 `contents: write` 和 `pull-requests: write` 权限。它只签出可信的默认分支提交，并禁用签出凭据。
 
-The evaluator reads the required source CI from `merge.requiredCI` in
-`.github/repo-automation/policy.yml`. Each workflow entry names a workflow file
-and, optionally, the changed-path globs that make it required; each check entry
-names a check run and the GitHub App id that must publish it. The current list
-requires successful current-head runs of **Basic checks** and
-**Validate changelog**, plus a successful `DCO` check from the DCO app. It also
-requires the action CI, Helm, dependency-integrity, and documentation workflows
-when their tracked PR path filters match a changed or renamed path. It uses the
-latest run number and current attempt for each required workflow. Runs must
-belong to this repository, use the `pull_request` event, and match the current
-head and expected workflow path. A populated PR mapping must identify this PR.
-An empty mapping can identify the PR through the exact
-`@refs/pull/<number>/merge` suffix. An empty mapping with a plain workflow path
-can instead match the live source repository, source branch, and head SHA;
-its normalized `prNumber` remains `null`. An explicit mapping to another PR
-or source ref cannot use this fallback.
-Missing or running evidence blocks success. Failed, cancelled, skipped, or
-malformed required evidence also blocks success. Incomplete or over-limit API
-collections fail closed. The merge-policy check and metadata/review workflows
-do not satisfy the source CI gate.
+评估器从 `.github/repo-automation/policy.yml` 的 `merge.requiredCI` 读取所需的源 CI。每个工作流条目命名一个工作流文件，并可选择性地给出使其成为必需的变更路径 glob；每个检查条目命名一个 check run 以及必须发布它的 GitHub App id。当前列表要求 **Basic checks** 和 **Validate changelog** 的当前头部 run 成功，以及来自 DCO app 的 `DCO` 检查成功。此外，当跟踪的 PR 路径过滤器匹配到变更或重命名路径时，还要求 action CI、Helm、依赖完整性和文档工作流成功。对每个必需工作流，评估器使用最新的 run 编号和当前尝试。run 必须属于本仓库、使用 `pull_request` 事件，并匹配当前头部和预期的工作流路径。非空的 PR 映射必须标识此 PR。空映射可以通过精确的 `@refs/pull/<number>/merge` 后缀标识此 PR。带纯工作流路径的空映射则可以改为匹配实时的源仓库、源分支和头部 SHA；其规范化的 `prNumber` 仍为 `null`。显式映射到另一个 PR 或源 ref 不能使用此回退。
 
-The `files` patterns use a portable subset of glob syntax so that the agent can
-evaluate the same list without a minimatch implementation. Configuration
-validation rejects anything else, including braces, brackets, `?`, extglob
-groups, negation, and `**` inside a segment. Each `/`-separated segment is
-either `**` or a run of letters, digits, `.`, `_`, and `-` in which `*` matches
-any characters inside that segment, including a leading dot. `**` matches zero
-or more whole segments, except as the last segment, where it matches one or
-more: `docs/**` matches `docs/a.md` but not `docs`, and `**/OWNERS` matches
-`OWNERS`. Matching is case-sensitive and applies to each changed path and to the
-previous path of a rename. Source CI can pass only for pull requests into
-`main`; any other base stays pending.
+缺失或运行中的证据会阻止成功。失败、取消、跳过或格式错误的必需证据也会阻止成功。不完整或超限的 API 集合会失败关闭。merge-policy 检查和元数据/评审工作流不满足源 CI 关卡。
 
-For an eligible request, the evaluator first publishes an `action_required`
-policy check. It reads authority, metadata, PR identity, and CI again, then
-enables native SQUASH auto-merge with `expectedHeadOid` when no request is armed.
-It does not retry that mutation. It reads the same evidence again before it
-publishes policy success and once more after success. Before success, failed
-or revoked evidence keeps the check blocked. After success, the evaluator
-attempts to restore a blocking check and disarm the request when it can confirm
-the current PR and head identity. A base branch or source identity change for
-the same head also triggers this repair. Failed reads or writes can prevent that
-repair, and GitHub can already have completed the merge. An existing eligible
-SQUASH request is preserved.
+`files` 模式使用 glob 语法的可移植子集，使 agent 无需 minimatch 实现即可评估同一列表。配置验证会拒绝其他任何内容，包括花括号、方括号、`?`、extglob 组、否定以及段内的 `**`。每个以 `/` 分隔的段要么是 `**`，要么是字母、数字、`.`、`_` 和 `-` 的序列，其中 `*` 匹配该段内的任意字符，包括前导点。`**` 匹配零个或多个完整段，但作为最后一段时匹配一个或多个：`docs/**` 匹配 `docs/a.md` 但不匹配 `docs`，而 `**/OWNERS` 匹配 `OWNERS`。匹配区分大小写，并应用于每个变更路径以及重命名的旧路径。源 CI 只对合并到 `main` 的 pull request 通过；任何其他基分支保持待定。
 
-These reads and the success check are separate GitHub operations. Evidence can
-change between them. The head guard does not pin reviews, labels, CI, or the
-base revision. CI evidence is tied to the source head and can be reused across
-PRs or base retargets when GitHub omits PR mappings. It does not prove that the
-current base tip or a retargeted base branch was tested. With branch protection
-`strict=false`, GitHub can merge without an up-to-date base. Required native
-reviews and checks remain the final merge controls. A source CI gate in this
-action does not make a separately required native CI check redundant.
+对于符合条件的 request，评估器首先发布 `action_required` 策略检查，然后再次读取权威、元数据、PR 身份和 CI。如果没有 request 已启用，就用 `expectedHeadOid` 启用原生 SQUASH 自动合并，且不会重试该变更。在发布策略成功之前，评估器再次读取同样的证据，成功之后再读一次。成功之前，失败或撤销的证据会使检查保持阻塞。成功之后，只要能够确认当前 PR 和头部身份，评估器就尝试恢复阻塞检查并解除 request。同一头部的基分支或源身份变更也会触发此修复。读取或写入失败可能阻止该修复，而 GitHub 可能已经完成合并。已有的符合条件的 SQUASH request 会被保留。
 
-### Labels-only policy evaluation
+这些读取和成功检查是彼此独立的 GitHub 操作，证据可能在它们之间变化。头部守卫不会固定评审、标签、CI 或基分支修订。CI 证据绑定到源头部，在 GitHub 省略 PR 映射时可在 PR 或基分支重定向之间复用，但它不证明当前的基分支尖端或被重定向的基分支分支经过测试。在分支保护 `strict=false` 时，GitHub 可以在基分支不是最新的情况下合并。必需的原生评审和检查仍是最终的合并控制。本 action 中的源 CI 关卡不会使单独必需的原生 CI 检查变得多余。
 
-The **Merge evaluation** workflow has a second job, `policy-labels`, gated by
-`REPOSITORY_AUTOMATION_POLICY_LABELS_ENABLED`. It runs on the same events as the
-merge job and reads the same review, command, and approver-author authority from
-the trusted default branch. It writes only the `lgtm`, `approved`,
-`do-not-merge/hold`, and `do-not-merge/needs-approval` labels. It does not read
-source CI, branch protection, or merge state, never publishes the merge-policy
-check, and never enables or disables native auto-merge. Its token has
-`actions: read`, `contents: read`, `issues: write`, and `pull-requests: write`,
-and the job has its own concurrency group.
+### 仅标签的策略评估
 
-Before it writes, the job reads the policy comment, the labels, and the pull
-request head again. If any of them changed since its evaluation read, it skips
-the write and reports `inputs-changed`; the run that made the change triggers the
-next evaluation. If the evaluation fails, the job writes nothing and the run
-fails. Unlike the merge job, it does not apply a fail-closed label plan, because
-that plan would remove an active `do-not-merge/hold`.
+**合并评估**工作流有第二个 job `policy-labels`，由 `REPOSITORY_AUTOMATION_POLICY_LABELS_ENABLED` 控制。它在与合并 job 相同的事件上运行，从可信默认分支读取相同的评审、命令和 approver-author 权威。该 job 只写入 `lgtm`、`approved`、`do-not-merge/hold` 和 `do-not-merge/needs-approval` 标签；不读取源 CI、分支保护或合并状态，从不发布 merge-policy 检查，也从不启用或禁用原生自动合并。其 token 拥有 `actions: read`、`contents: read`、`issues: write` 和 `pull-requests: write`，并有自己的并发组。
 
-The job never removes `do-not-merge/hold`. Only an `/unhold` clears a hold, and
-the **Commands** run that applies it removes the label. A hold label without hold
-state stays, for example one that a maintainer added by hand or one that a
-`/hold` run wrote before its state.
+在写入之前，job 会再次读取策略评论、标签和 pull request 头部。如果其中任何内容自其评估读取以来发生变化，它会跳过写入并报告 `inputs-changed`；做出更改的那个 run 会触发下一次评估。如果评估失败，job 什么也不写，run 失败。与合并 job 不同，它不应用失败关闭的标签计划，因为该计划会移除一个正在生效的 `do-not-merge/hold`。
 
-Use this job when another controller merges on these labels. Follow this order,
-because the merge job enables native auto-merge again on eligible pull requests
-for as long as it is enabled:
+该 job 从不移除 `do-not-merge/hold`。只有 `/unhold` 能清除 hold，应用它的**命令** run 会移除该标签。没有 hold 状态的 hold 标签会保留，例如维护者手工添加的，或某个 `/hold` run 在写入其状态之前写下的。
 
-1. Set `REPOSITORY_AUTOMATION_POLICY_LABELS_ENABLED=true` and confirm that a
-   **Merge evaluation** run applies labels from its `policy-labels` job.
-2. Set `REPOSITORY_AUTOMATION_MERGE_ENABLED=false`. Wait until no **Merge
-   evaluation** `evaluate` job is queued or running.
-3. Disable native auto-merge on every open pull request that has it. This
-   command lists them:
+当另一个控制器基于这些标签合并时，请使用此 job。请遵循以下顺序，因为只要合并 job 启用，它就会在符合条件的 pull request 上重新启用原生自动合并：
+
+1. 设置 `REPOSITORY_AUTOMATION_POLICY_LABELS_ENABLED=true`，确认一次**合并评估** run 从其 `policy-labels` job 应用标签。
+2. 设置 `REPOSITORY_AUTOMATION_MERGE_ENABLED=false`。等到没有任何**合并评估** `evaluate` job 处于排队或运行中。
+3. 在每一个启用了原生自动合并的未关闭 pull request 上禁用它。以下命令会列出它们：
 
    ```shell
    gh pr list --repo NVIDIA/k8s-test-infra --state open --limit 200 \
@@ -315,154 +122,56 @@ for as long as it is enabled:
      --jq '.[] | select(.autoMergeRequest != null) | "\(.number) \(.baseRefName)"'
    ```
 
-   Run `gh pr merge <number> --repo NVIDIA/k8s-test-infra --disable-auto` for
-   each listed pull request. Repeat the list command until it prints nothing.
-4. In branch protection for `main`, replace the required
-   `repository-automation/merge-policy` check with the gate of the new
-   controller.
+   对列出的每个 pull request 运行 `gh pr merge <number> --repo NVIDIA/k8s-test-infra --disable-auto`。重复该列表命令直到它不打印任何内容。
+4. 在 `main` 的分支保护中，把必需的 `repository-automation/merge-policy` 检查替换为新控制器的关卡。
 
-While both variables are `true`, both jobs write the same labels from separate
-concurrency groups. Keep that overlap short.
+当两个变量都为 `true` 时，两个 job 会从各自的并发组写入相同的标签。请让这种重叠保持短暂。
 
-### Automatic approval for approver authors
+### approver 作者的自动批准
 
-A PR author who is a verified human approver in trusted base OWNERS implicitly
-approves the changed files within that approver's authority. The evaluator adds
-`approved` when those files and any independent approvals cover every changed
-file. OWNERS aliases and active nested OWNERS rules apply; `no_parent_owners`
-can exclude a root approver. The PR's proposed OWNERS changes cannot grant this
-authority. Metadata also accepts those author-owned paths without requesting
-a review from the author.
+在可信基分支 OWNERS 中经过验证的人工 approver，作为 PR 作者时，会在该 approver 权限范围内隐式批准其更改的文件。当这些文件以及任何独立批准覆盖了所有变更文件时，评估器添加 `approved`。OWNERS 别名和生效的嵌套 OWNERS 规则适用；`no_parent_owners` 可以排除根 approver。PR 提出的 OWNERS 变更不能授予此权威。元数据也接受这些作者拥有的路径，而不向作者请求评审。
 
-An independent authorized human must still provide `/lgtm` for the current
-head. The author cannot give their own PR an LGTM. The evaluator reads author
-identity and trusted OWNERS again before success; removed authority revokes
-implicit approval. A new head invalidates old LGTM evidence and requires a
-fresh coverage check. Holds, required checks, and GitHub's native review
-requirements still apply. An `approved` label does not satisfy a required
-GitHub approval review or enable auto-merge.
+当前头部仍必须由一位独立的授权人类提供 `/lgtm`。作者不能给自己的 PR 发 LGTM。评估器在成功前再次读取作者身份和可信 OWNERS；被移除的权威会撤销隐式批准。新头部会使旧的 LGTM 证据失效，并要求重新检查覆盖。hold、必需的检查和 GitHub 的原生评审要求仍然适用。`approved` 标签不满足必需的 GitHub 批准评审，也不会启用自动合并。
 
-Conversation commands use the same current native approval and review LGTM
-evidence as merge evaluation. Approval coverage can combine native reviews,
-`/approve` commands, and approver-author authority across separate OWNERS
-scopes. A `/hold` command preserves valid approval and LGTM labels. Commands
-read trusted OWNERS and validated review evidence again before any write;
-changed evidence stops the run. Native reviews remain live evidence and are
-not copied into command state.
+对话命令使用与合并评估相同的当前原生批准和评审 LGTM 证据。批准覆盖可以跨不同的 OWNERS 范围组合原生评审、`/approve` 命令和 approver-author 权威。`/hold` 命令会保留有效的批准和 LGTM 标签。命令在任何写入前再次读取可信 OWNERS 和已验证的评审证据；证据变化会停止 run。原生评审仍是实时证据，不会被复制进命令状态。
 
-### Queued commands
+### 排队命令
 
-GitHub keeps at most one pending run in a concurrency group, so a newer
-**Commands** or **PR metadata** run for the same pull request cancels a pending
-**Commands** run. Each **Commands** run therefore lists the pull request comments
-and first applies the `/hold`, `/unhold`, and `/retest` commands from unprocessed
-comments that are older than its own comment, in comment ID order, then its own.
-A run started by a comment without commands also does this. Each comment must
-come from a human account and must not be edited, and its author's live
-identity and repository access are checked as for the comment that started the
-run. A caught-up comment
-is recorded as processed only when it changed something, or when it had an
-`/lgtm` or `/approve` rejected that its author is allowed to give. Comments from
-other commenters that change nothing therefore cannot fill the command history.
-Processed comment IDs are stored in the policy comment, so a repeated delivery
-changes nothing.
+GitHub 在一个并发组中最多保留一个待处理 run，因此同一 pull request 上较新的**命令**或 **PR 元数据** run 会取消待处理的**命令** run。为此，每个**命令** run 会列出该 pull request 的评论：先按评论 ID 顺序，应用来自早于其自身评论、尚未处理的评论中的 `/hold`、`/unhold` 和 `/retest` 命令，再应用其自身评论中的命令。由不含命令的评论启动的 run 也照此处理。每条评论必须来自人类账户且未被编辑，其作者的实时身份和仓库访问权限也要像对启动 run 的评论那样检查。一条补追的评论只有在改变了某些内容，或其 `/lgtm` 或 `/approve` 本可由其作者给出却被拒绝时，才记录为已处理。因此，其他评论者未改变任何内容的评论无法填充命令历史。已处理的评论 ID 存储在策略评论中，因此重复派发不会改变任何内容。
 
-Only comments created in the last 24 hours, by GitHub's comment creation time,
-are caught up, so a first run does not replay old history. Comments older than
-the newest processed command are not applied later, because that would reorder
-them after newer commands. Comments newer than the run's own comment are left to
-their own run. A caught-up `/lgtm` or `/approve` from a reviewer or approver who
-may give it is recorded as processed but grants no evidence, because it may have
-been written before a push to the head; the reviewer must comment again. A
-caught-up `/lgtm` or `/approve` from anyone else, including the pull request
-author, is ignored and not shown. The command summary in the
-policy comment names each such comment ID and asks for a re-issue on the
-current head, for up to 20 comments plus a count of the rest. It also shows the
-line results of the last processed comment, and the job summary lists every
-processed comment ID. A comment whose run was cancelled stays unapplied until the next
-**Commands** run for that pull request, and is dropped if that run starts more
-than 24 hours later.
+只有最近 24 小时内创建的评论（按 GitHub 的评论创建时间）才会被补追，因此首次 run 不会重放旧历史。比最新已处理命令更旧的评论不会在以后应用，否则会把它们重新排序到较新命令之后。比 run 自身评论更新的评论，则留给它们自己的 run。来自可给出该证据的评审者或 approver 的补追 `/lgtm` 或 `/approve`，会记录为已处理但不授予证据，因为它可能是在推送头部之前写的；评审者必须再次评论。来自其他任何人（包括 PR 作者）的补追 `/lgtm` 或 `/approve` 会被忽略且不显示。策略评论中的命令摘要会点出每个这样的评论 ID，并要求在当前头部重新发出，最多 20 条外加其余计数。它还会显示最后一条已处理评论的行结果，job 摘要则列出每个已处理的评论 ID。其 run 被取消的评论会保持未应用，直到该 pull request 的下一次**命令** run；如果那次 run 在 24 小时之后才启动，该评论会被丢弃。
 
-### Dispatched label scan reports
+### 派发的标签扫描报告
 
-The **PR metadata** workflow also accepts a `workflow_dispatch` request on
-`main`, with exactly two string inputs: `request_id` (a canonical lowercase
-UUID) and `workflow_commit_sha` (the full lowercase main commit SHA). The
-metadata flag must be enabled. The selected workflow commit, run commit,
-and input commit must match in `NVIDIA/k8s-test-infra`. The workflow checks
-out that exact trusted commit in `control`; it accepts no checkout path or
-other caller input.
+**PR 元数据**工作流还接受在 `main` 上的 `workflow_dispatch` 请求，恰好带两个字符串输入：`request_id`（规范的小写 UUID）和 `workflow_commit_sha`（完整的小写 main 提交 SHA）。元数据标志必须启用。所选工作流提交、run 提交和输入提交必须在 `NVIDIA/k8s-test-infra` 中匹配。工作流在 `control` 中签出那个确切的可信提交；它不接受签出路径或其他调用者输入。
 
-Dispatch runs `conflict-labels` and `metadata-labels` as two separate action
-calls. The metadata scan runs even if the conflict scan fails. After both
-calls, the workflow uploads `mokka-label-scan-<request_id>` with the fixed
-members `conflict-labels.json` and `metadata-labels.json`, then fails the job
-if either scan failed. A failure before a complete candidate list is known
-cannot produce a report that claims an empty list.
+派发会把 `conflict-labels` 和 `metadata-labels` 作为两个独立的 action 调用运行。即使冲突扫描失败，元数据扫描也会运行。两次调用之后，工作流上传 `mokka-label-scan-<request_id>`，其固定成员为 `conflict-labels.json` 和 `metadata-labels.json`，然后如果任一扫描失败就让 job 失败。在获知完整候选列表之前发生的失败，无法产生声称列表为空的报告。
 
-Each version 1 report contains the request and repository identities, the
-workflow commit, mode, dry-run state, complete sorted candidate numbers, and
-one result for each candidate. Results use `applied`, `unchanged`, `deferred`,
-or `failed`, with a fixed reason and SHA-256 hashes of the input fence and
-managed labels. An unprocessed request is `failed` with `not_processed`.
-Reports contain no raw titles, node IDs, branch names, or label names. Each
-report is limited to 70 KiB and 100 candidates.
+每份版本 1 报告包含请求和仓库身份、工作流提交、模式、dry-run 状态、完整排序的候选编号，以及每个候选的一个结果。结果使用 `applied`、`unchanged`、`deferred` 或 `failed`，并带有固定原因以及输入围栏和受管理标签的 SHA-256 哈希。未处理的 request 是 `failed`，原因为 `not_processed`。报告不含原始标题、节点 ID、分支名或标签名。每份报告限制为 70 KiB 和 100 个候选。
 
-Dispatch success requires a fresh label read followed by a final PR fence,
-including requests with initially correct labels. An acknowledged update that is still
-absent at the next read fails the scan. Unknown mergeability, changed state,
-or an invalid policy leaves coverage unresolved and has no output label hash.
-The complete reports can thus be checked against a later live observation.
-Native PR, push, and scheduled runs keep their existing summary and behavior;
-they do not create these report files. Keep the hourly recovery schedule until
-the poll-driven dispatch path has passed its live activation checks.
+派发成功需要一次新鲜的标签读取，随后是最终的 PR 围栏，包括那些起初标签正确的 request。在下次读取时仍缺失的已确认更新会让扫描失败。未知的合并性、变化的状态或无效策略会使覆盖无法确定，且没有输出标签哈希，因此完整报告可以与之后的实时观察核对。原生 PR、push 和定时 run 保持其现有的摘要和行为，但不创建这些报告文件。在轮询驱动的派发路径通过其实时激活检查之前，保留每小时的恢复定时。
 
-## LGTM in pull request reviews
+## pull request 评审中的 LGTM
 
-The merge evaluator accepts an explicit `/lgtm` line in the current body of an
-`APPROVED` or `COMMENTED` review. The reviewer must be a verified human, a current
-OWNERS reviewer or approver for the changed files, and not the pull request
-author. The review must refer to the current pull request head. Human reviews
-can grant evidence on a pull request authored by a bot.
+合并评估器接受处于 `APPROVED` 或 `COMMENTED` 评审当前正文中的显式 `/lgtm` 行。评审者必须是经过验证的人类、是变更文件的当前 OWNERS 评审者或 approver，并且不是 PR 作者。评审必须引用当前的 pull request 头部。人类评审可以对机器人创作的 pull request 授予证据。
 
-Review LGTM is separate from native approval coverage. An approving review
-without `/lgtm` does not grant LGTM. A `COMMENTED` review with `/lgtm` does not
-grant approval. Other commands in review bodies are not executed. Quoted or
-fenced commands do not count, and invalid command syntax does not grant review
-LGTM. `/lgtm cancel` is not a supported command.
+评审 LGTM 与原生批准覆盖是分开的。没有 `/lgtm` 的批准评审不授予 LGTM。带 `/lgtm` 的 `COMMENTED` 评审不授予批准。评审正文中的其他命令不会被执行。被引用或围栏内的命令不计入，无效的命令语法不授予评审 LGTM。`/lgtm cancel` 不是受支持的命令。
 
-The latest submitted review from each actor replaces that actor's older review
-LGTM. Submission time determines the order; the higher review ID breaks a tie.
-A pending review does not replace submitted evidence. The evaluator reads the
-current review body, state, author, commit, and submission time again after
-label changes, before the success check, and after that check. Removing or
-replacing `/lgtm`, dismissing the review, or changing the pull request head
-removes that review evidence. Review commands are not stored as historical
-authority in the policy comment. Stored
-issue-comment LGTM remains separate and must pass its existing live checks.
+来自每个 actor 的最新提交的评审会取代该 actor 较旧的评审 LGTM。提交时间决定顺序，较高的评审 ID 用于打破平局。待处理的评审不会取代已提交的证据。评估器在标签更改后、成功检查前以及该检查之后，再次读取当前评审正文、状态、作者、提交和提交时间。移除或替换 `/lgtm`、驳回评审或更改 pull request 头部，都会移除该评审证据。评审命令不会作为历史权威存储在策略评论中。存储的问题评论 LGTM 仍然独立，必须通过其现有的实时检查。
 
-Bot-authored pull requests can receive metadata labels and human reviewer
-requests. Bot reviews are validated and then excluded from human approval
-evidence. A bot cannot provide OWNERS, reviewer, approver, or LGTM authority.
+机器人创作的 pull request 可以获得元数据标签和人类评审者请求。机器人评审会被验证，然后从人类批准证据中排除。机器人不能提供 OWNERS、评审者、approver 或 LGTM 权威。
 
-Current metadata evidence does not require an earlier conversation command.
-A trusted metadata comment can have no command-state record. Unknown,
-malformed, duplicate, or wrong-context command-state records remain blocked.
+当前元数据证据不需要更早的对话命令。可信的元数据评论可以没有命令状态记录。未知、格式错误、重复或上下文错误的命令状态记录会保持阻塞。
 
-## Security and operations
+## 安全与运维
 
-- Keep top-level workflow permissions empty. Grant permissions per job.
-- Keep every external action pinned to a complete commit SHA.
-- Keep the automation checkout separate from the target checkout.
-- Resolve the default branch through GitHub and check out its exact commit SHA.
-- Do not enable credentials, submodules, or LFS in the automation checkout.
-- Treat comments and event payload text as hints. The action refetches live
-  GitHub state before it writes.
-- Review the action job summary for each invocation.
-- Keep the scheduled evaluator because it repairs missed or delayed events.
+- 让顶层工作流权限保持为空。按 job 授予权限。
+- 让每个外部 action 固定到完整的提交 SHA。
+- 让自动化签出与目标签出分开。
+- 通过 GitHub 解析默认分支并签出其确切的提交 SHA。
+- 不要在自动化签出中启用凭据、子模块或 LFS。
+- 把评论和事件 payload 文本当作提示信息。action 在写入前会重新获取实时 GitHub 状态。
+- 审阅每次调用的 action job 摘要。
+- 保留定时评估器，因为它会修复遗漏或延迟的事件。
 
-To stop repository writes, set the applicable activation variable to `false`.
-After merge evaluation is disabled, maintainers must disable native auto-merge
-on every open pull request and confirm that none is still armed, because the
-evaluator enables it again while it runs. Do not remove the required merge check
-until maintainers select and document a replacement gate.
+要停止仓库写入，请把适用的激活变量设为 `false`。在合并评估被禁用后，维护者必须在每一个未关闭的 pull request 上禁用原生自动合并，并确认没有任何一个仍处于启用状态，因为评估器在运行时会再次启用它。在维护者选择并记录替代关卡之前，不要移除必需的合并检查。

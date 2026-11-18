@@ -1,89 +1,61 @@
 # vGPU
 
-Everything the `virtualization.vgpu` block of a profile means: how a GPU
-becomes a vGPU host or a vGPU guest, the fields each side takes, what NVML and
-`nvidia-smi` report for them, and what is refused at load.
+profile 中 `virtualization.vgpu` 块的一切含义：GPU 如何成为 vGPU 宿主机或 vGPU 客户机、两侧各自的字段、NVML 和 `nvidia-smi` 如何报告它们，以及加载时哪些内容会被拒绝。
 
-This is a reference. For installing a host or a guest node and reading it back
-with `nvidia-smi`, see the [vGPU host and guest guide](guides/vgpu/README.md);
-for the rest of a profile, [Configuration](configuration.md).
+本文是参考文档。关于安装宿主机或客户机节点并用 `nvidia-smi` 读回，参见 [vGPU 宿主机与客户机指南](guides/vgpu/README.md)；profile 的其余部分参见[配置参考](configuration.md)。
 
-## What it simulates
+## 模拟了什么
 
-NVIDIA vGPU splits a physical GPU into virtual GPUs that a hypervisor hands to
-virtual machines (VMs). Two drivers are involved, and each sees something
-different. The **host** is the hypervisor's physical GPU, running the vGPU
-manager and the vGPU instances carved from it. The **guest** is the vGPU as
-the VM sees it: a GPU that knows it is virtual, which host driver it runs on,
-and whether it holds a vGPU software license. Mokka simulates either view at
-the driver level, so `nvidia-smi` and go-nvml consumers read it as they would
-on a real hypervisor or VM. No hypervisor or VM is involved.
+NVIDIA vGPU 把一块物理 GPU 拆分成虚拟 GPU，由 hypervisor 交给虚拟机（VM）。涉及两个驱动，各自看到不同的东西。**宿主机**是 hypervisor 的物理 GPU，运行 vGPU manager 和从中切出的 vGPU 实例。**客户机**是 VM 所看到的 vGPU：一块知道自己虚拟身份的 GPU，知道它运行在哪个宿主机驱动上，以及是否持有 vGPU 软件许可证。Mokka 在驱动层模拟任一种视图，因此 `nvidia-smi` 和 go-nvml 消费者读到的内容与真实 hypervisor 或 VM 上一样。不涉及 hypervisor 或 VM。
 
-## Choosing a side
+## 选择哪一侧
 
-`device_defaults.virtualization.mode` selects what NVML reports:
+`device_defaults.virtualization.mode` 选择 NVML 报告什么：
 
-| `mode` | `nvmlDeviceGetVirtualizationMode` | What else changes |
+| `mode` | `nvmlDeviceGetVirtualizationMode` | 其他变化 |
 |---|---|---|
-| `none` | `NVML_GPU_VIRTUALIZATION_MODE_NONE` | Nothing: bare metal. Every shipped profile declares it |
-| `passthrough` | `NVML_GPU_VIRTUALIZATION_MODE_PASSTHROUGH` | Nothing else |
-| `vgpu` | `NVML_GPU_VIRTUALIZATION_MODE_VGPU` | With a [`guest` block](#guest): licensing, and the PCI capability GFD reads |
-| `host_vgpu` | `NVML_GPU_VIRTUALIZATION_MODE_HOST_VGPU` | The [host](#host) types and running instances |
+| `none` | `NVML_GPU_VIRTUALIZATION_MODE_NONE` | 无：裸机。每个自带 profile 都声明它 |
+| `passthrough` | `NVML_GPU_VIRTUALIZATION_MODE_PASSTHROUGH` | 无其他变化 |
+| `vgpu` | `NVML_GPU_VIRTUALIZATION_MODE_VGPU` | 有 [`guest` 块](#guest)时：许可信息，以及 GFD 读取的 PCI 能力 |
+| `host_vgpu` | `NVML_GPU_VIRTUALIZATION_MODE_HOST_VGPU` | [宿主机](#host)类型和运行中的实例 |
 
-`nvidia-smi -q` prints the two vGPU modes as `VGPU` and `Host VGPU`. An
-unrecognised mode reports `NONE` and ignores the `vgpu` block.
+`nvidia-smi -q` 把两种 vGPU 模式打印为 `VGPU` 和 `Host VGPU`。无法识别的模式报告 `NONE` 并忽略 `vgpu` 块。
 
-vGPU is configured in `device_defaults` only: a
-[per-device override](configuration.md#per-device-overrides) does not merge
-`virtualization`, so every GPU on the node starts on the same side. Only a
-[runtime override](#runtime-overrides) can move one GPU to another.
+vGPU 只能在 `device_defaults` 中配置：[逐设备覆盖](configuration.md#per-device-overrides)不会合并 `virtualization`，因此节点上所有 GPU 都从同一侧启动。只有[运行时覆盖](#runtime-overrides)能把某一块 GPU 移到另一侧。
 
-### Under the chart
+### 在 chart 下
 
-The chart sets the block from `gpu.vgpu`, so an install names neither the
-NVML mode nor the profile key:
+chart 从 `gpu.vgpu` 设置该块，因此安装时既不需要写 NVML 模式也不需要写 profile 键：
 
-| `gpu.vgpu` | Default | Meaning |
+| `gpu.vgpu` | 默认值 | 含义 |
 |---|---|---|
-| `mode` | `""` | `host` renders `mode: host_vgpu`, `guest` renders `mode: vgpu`, `""` leaves the profile's block untouched |
-| `hostVgpuMode` | `sriov` | Host only. Becomes `host_vgpu_mode` |
-| `types` | `[]` | Host only. The [types](#types), in the profile's snake_case form |
-| `instances` | `[]` | Host only. The [running instances](#instances) |
-| `guest` | `{}` | Guest only. The [guest block](#guest), in the profile's snake_case form |
+| `mode` | `""` | `host` 渲染为 `mode: host_vgpu`，`guest` 渲染为 `mode: vgpu`，`""` 保持 profile 的块不变 |
+| `hostVgpuMode` | `sriov` | 仅宿主机。变为 `host_vgpu_mode` |
+| `types` | `[]` | 仅宿主机。[类型](#types)，使用 profile 的 snake_case 形式 |
+| `instances` | `[]` | 仅宿主机。[运行中的实例](#instances) |
+| `guest` | `{}` | 仅客户机。[guest 块](#guest)，使用 profile 的 snake_case 形式 |
 
-`mode: host` passes only `hostVgpuMode`, `types` and `instances`; `mode: guest`
-passes only `guest`. The chart ignores the other mode's fields rather than
-refusing them. `mode: guest` with an empty `guest` renders `mode: vgpu` and no
-`vgpu` block, which is the [mode-only guest](#a-guest-with-no-block). The chart
-refuses to render `mode: host` with no `types` or with `gpu.mig.enabled`; every
-other rule is the node agent's, which [validates](#validation) the rendered
-block.
+`mode: host` 只传 `hostVgpuMode`、`types` 和 `instances`；`mode: guest` 只传 `guest`。chart 会忽略另一侧模式的字段，而不是拒绝它们。`mode: guest` 搭配空 `guest` 会渲染为 `mode: vgpu` 且没有 `vgpu` 块，这就是[只有模式的客户机](#a-guest-with-no-block)。chart 拒绝渲染没有 `types` 的 `mode: host`，也拒绝与 `gpu.mig.enabled` 一起渲染；其余规则由节点 agent 执行，它会[校验](#validation)渲染出的块。
 
-### Runtime overrides
+### 运行时覆盖
 
-[`nvml-mock-ctl set`](nvml-mock-ctl.md#set--set-arbitrary-fields) can change
-`virtualization` on a running node, for one GPU or for all of them. An override
-is not validated like the profile: only its field names and value types are
-checked, not the [validation rules](#validation). A GPU set to `host_vgpu` with
-no `vgpu` block, for example, reports `Host VGPU` as its mode and answers
-`NVML_ERROR_NOT_SUPPORTED` to every vGPU call. The guest's PCI capability is
-written by the node agent from the profile, so an override does not change it.
+[`nvml-mock-ctl set`](nvml-mock-ctl.md#set--set-arbitrary-fields) 可以在运行中的节点上改变 `virtualization`，针对一块或所有 GPU。覆盖不像 profile 那样被校验：只检查字段名和值类型，不检查[校验规则](#validation)。例如，一块被设为 `host_vgpu` 却没有 `vgpu` 块的 GPU，会把模式报告为 `Host VGPU`，并对所有 vGPU 调用应答 `NVML_ERROR_NOT_SUPPORTED`。客户机的 PCI 能力由节点 agent 根据 profile 写入，因此覆盖不会改变它。
 
-Toggling a guest's license works:
+切换客户机许可证是可行的：
 
 ```bash
 nvml-mock-ctl set --gpu 0 virtualization.vgpu.guest.license.state=unlicensed
 ```
 
-The next `nvidia-smi -q` reports GPU 0 unlicensed.
+下一次 `nvidia-smi -q` 会报告 GPU 0 未获许可。
 
-## Host
+## 宿主机
 
 ```yaml
 device_defaults:
   virtualization:
     mode: "host_vgpu"
-    host_vgpu_mode: "sriov"           # sriov, non_sriov
+    host_vgpu_mode: "sriov"           # sriov、non_sriov
     vgpu:
       types:
         - id: 474
@@ -96,101 +68,57 @@ device_defaults:
           count: 2
 ```
 
-No profile ships a type list. Which types a board offers depends on the vGPU
-software release, not on the silicon, so an install declares its own, taking
-the IDs, names and sizes from that release's documentation.
+没有 profile 自带类型列表。一块板卡提供哪些类型取决于 vGPU 软件版本，而不是芯片本身，因此安装要声明自己的类型，ID、名称和大小取自该版本的文档。
 
-`host_vgpu_mode` is required: `sriov` or `non_sriov`. `nvidia-smi -q` prints it
-as `Host VGPU Mode`.
+`host_vgpu_mode` 是必需的：`sriov` 或 `non_sriov`。`nvidia-smi -q` 把它打印为 `Host VGPU Mode`。
 
-### Types
+### 类型
 
-| Field | Default | Meaning |
+| 字段 | 默认值 | 含义 |
 |---|---|---|
-| `id` | required | The vGPU type ID NVML hands out. Non-zero, unique within the list. A type ID names the same type on every GPU |
-| `name` | required | What `nvidia-smi vgpu` prints, e.g. `NVIDIA A100-4C`. Unique within the list; `instances` refer to it |
-| `framebuffer_mib` | required | Framebuffer per instance, non-zero |
-| `max_instances` | required | How many instances of this type one GPU holds, `1`–`999` |
-| `class` | `Compute` | The type's class string |
-| `max_instances_per_vm` | `1` | Instances one VM may hold |
-| `license` | `""` | The license string the type requires |
-| `num_display_heads` | `1` | Display heads |
-| `resolution` | `{width: 4096, height: 2160}` | Maximum resolution, reported for every display head |
-| `frame_rate_limit` | `0` | Frame-rate limit |
-| `gpu_instance_profile_id` | not MIG-backed (`0xFFFFFFFF`) | The MIG GPU instance profile behind the type |
-| `device_id` | the board's `pci.device_id` | The PCI device and vendor ID the type presents to its guest, encoded as in the profile's `pci` block |
-| `subsystem_id` | the board's `pci.subsystem_id` | The PCI subsystem and subsystem vendor ID the type presents to its guest |
+| `id` | 必需 | NVML 分发的 vGPU 类型 ID。非零，列表内唯一。类型 ID 在每块 GPU 上命名同一类型 |
+| `name` | 必需 | `nvidia-smi vgpu` 打印的内容，如 `NVIDIA A100-4C`。列表内唯一；`instances` 引用它 |
+| `framebuffer_mib` | 必需 | 每个实例的显存，非零 |
+| `max_instances` | 必需 | 一块 GPU 能容纳该类型的实例数，`1`–`999` |
+| `class` | `Compute` | 类型的 class 字符串 |
+| `max_instances_per_vm` | `1` | 一个 VM 可持有的实例数 |
+| `license` | `""` | 该类型需要的许可证字符串 |
+| `num_display_heads` | `1` | 显示头数 |
+| `resolution` | `{width: 4096, height: 2160}` | 最大分辨率，对每个显示头报告 |
+| `frame_rate_limit` | `0` | 帧率限制 |
+| `gpu_instance_profile_id` | 非 MIG 支撑（`0xFFFFFFFF`） | 该类型背后的 MIG GPU 实例 profile |
+| `device_id` | 板卡的 `pci.device_id` | 类型向客户机呈现的 PCI 设备和厂商 ID，编码方式与 profile 的 `pci` 块相同 |
+| `subsystem_id` | 板卡的 `pci.subsystem_id` | 类型向客户机呈现的 PCI 子系统和子系统厂商 ID |
 
-The two PCI IDs are what `nvmlVgpuTypeGetDeviceID` reports. NVML reports them
-per type rather than per board, so each can be set per type; one left unset
-takes the board's.
+这两个 PCI ID 是 `nvmlVgpuTypeGetDeviceID` 报告的内容。NVML 按类型而非按板卡报告它们，因此每个都可以逐类型设置；未设置的取板卡的值。
 
-### Instances
+### 实例
 
-Each entry asks for `count` running instances of the named type. An omitted
-count means one. Instances run from the moment the library loads; no NVML call
-creates or destroys them, and only a [runtime override](#runtime-overrides) of
-`instances` changes the set.
+每个条目请求 `count` 个指定类型的运行中实例。省略 `count` 表示 1 个。实例从库加载那一刻起就运行；没有 NVML 调用能创建或销毁它们，只有[运行时覆盖](#runtime-overrides)的 `instances` 能改变集合。
 
-A GPU runs one vGPU type at a time, so every entry names the same type, and
-their counts together are bounded by that type's `max_instances`. When the
-profile sets `memory.total_bytes`, their framebuffer together must fit it.
+一块 GPU 一次只运行一种 vGPU 类型，因此所有条目都命名同一类型，其数量总和受该类型 `max_instances` 限制。当 profile 设置了 `memory.total_bytes` 时，它们的显存总和必须能装进去。
 
-### Host identities
+### 宿主机身份
 
-An instance's ID is `(GPU index + 1) × 1000 + slot + 1`, where the slot counts
-the GPU's instances from zero in declaration order: GPU 0's first instance is
-`1001`, GPU 1's second is `2002`. The GPU index is the GPU's physical index on
-the node, not the enumeration index a container sees: in a container given only
-GPU 3, that GPU's first instance is still `4001`. The ID encodes its GPU, so it
-is the same in every process.
+实例 ID 是 `(GPU 索引 + 1) × 1000 + 槽位 + 1`，其中槽位按声明顺序从零开始计算该 GPU 的实例：GPU 0 的第一个实例是 `1001`，GPU 1 的第二个是 `2002`。GPU 索引是 GPU 在节点上的物理索引，不是容器看到的枚举索引：在只给了 GPU 3 的容器中，该 GPU 的第一个实例仍是 `4001`。ID 编码了它所属的 GPU，因此在每个进程中都相同。
 
-Each instance's vGPU UUID and VM UUID are derived from its GPU's UUID and slot.
-They are stable across restarts when the profile declares `devices[].uuid`,
-which every shipped profile does.
+每个实例的 vGPU UUID 和 VM UUID 由其 GPU 的 UUID 和槽位派生。当 profile 声明了 `devices[].uuid` 时，它们在重启之间保持稳定——每个自带 profile 都这么做了。
 
-Every instance runs in a VM of its own. The VM name is blank. The guest driver
-version is `Not Available`, which is what NVML reports until a driver loads in
-the VM, and no simulated VM loads one; `nvidia-smi` prints it as `N/A`. ECC
-mode follows the board's
-`ecc.mode_current`, and the GPU
-instance ID is not MIG-backed, which `nvidia-smi` prints as `N/A`.
+每个实例运行在自己的 VM 中。VM 名称为空。客户机驱动版本是 `Not Available`，这是 NVML 在 VM 中加载驱动前报告的值，而模拟 VM 不会加载驱动；`nvidia-smi` 打印为 `N/A`。ECC 模式跟随板卡的 `ecc.mode_current`，GPU 实例 ID 非 MIG 支撑，`nvidia-smi` 打印为 `N/A`。
 
-### Host behaviour
+### 宿主机行为
 
-**Supported and creatable types.** `nvidia-smi vgpu -s` lists every declared
-type. `nvidia-smi vgpu -c` lists what could still be created: every declared
-type while no instance runs, then only the running type until the GPU holds
-`max_instances` of it, then nothing.
+**支持的类型和可创建的类型。** `nvidia-smi vgpu -s` 列出所有声明的类型。`nvidia-smi vgpu -c` 列出仍可创建的内容：没有实例运行时是所有声明的类型，之后只有正在运行的那种，直到 GPU 持有该类型的 `max_instances` 个实例，然后什么都不列出。
 
-**Idle instances.** No process runs in a simulated guest, so every instance
-reports no framebuffer used, no encoder or frame buffer capture (FBC) sessions,
-and accounting disabled. Each reports itself licensed, with a permanent
-license.
+**空闲实例。** 模拟客户机中没有进程运行，因此每个实例都报告零显存使用、零编码器和帧缓冲捕获（FBC）会话，以及禁用的计费。每个实例都报告自己已获许可，且许可证是永久的。
 
-**Not implemented, `N/A`.** These calls return `NVML_ERROR_NOT_SUPPORTED`, which
-`nvidia-smi` prints as `N/A`: an instance's placement ID, mdev UUID, accounting
-PIDs, utilization and guest PCI bus ID; a type's BAR1 info, capabilities,
-placements and maximum instances per GPU instance; and the device's vGPU
-capabilities, vGPU driver capabilities and heterogeneous mode.
+**未实现，`N/A`。** 这些调用返回 `NVML_ERROR_NOT_SUPPORTED`，`nvidia-smi` 打印为 `N/A`：实例的 placement ID、mdev UUID、计费 PID、利用率和客户机 PCI 总线 ID；类型的 BAR1 信息、能力、placement 和每个 GPU 实例的最大实例数；以及设备的 vGPU 能力、vGPU 驱动能力和异构模式。
 
-**Errors.** A host-side vGPU call on a GPU that is not in `host_vgpu` mode
-returns `NVML_ERROR_NOT_SUPPORTED`, as a bare-metal driver does, and
-`nvidia-smi vgpu` prints `No supported devices in vGPU mode`. An unknown type
-ID returns `NVML_ERROR_INVALID_ARGUMENT`. For an instance ID, NVML reserves
-`NVML_ERROR_INVALID_ARGUMENT` for `0`; any other ID that matches no running
-instance, including one on a GPU the caller cannot see, returns
-`NVML_ERROR_NOT_FOUND`. The vGPU calls answer
-from configuration and do not advance
-[failure injection](helm-chart.md#failure-injection)'s call counter. A call that
-takes a device handle or an instance ID reports the loss once failure injection
-has made that GPU lost; a call that takes only a type ID answers from any other
-GPU that declares the type.
+**错误。** 对不处于 `host_vgpu` 模式的 GPU 发起宿主机侧 vGPU 调用会返回 `NVML_ERROR_NOT_SUPPORTED`，与裸机驱动一样，`nvidia-smi vgpu` 打印 `No supported devices in vGPU mode`。未知类型 ID 返回 `NVML_ERROR_INVALID_ARGUMENT`。对于实例 ID，NVML 为 `0` 保留 `NVML_ERROR_INVALID_ARGUMENT`；其他不匹配运行中实例的 ID，包括调用方看不到的 GPU 上的实例，都返回 `NVML_ERROR_NOT_FOUND`。vGPU 调用根据配置应答，不会推进[故障注入](helm-chart.md#failure-injection)的调用计数器。接受设备句柄或实例 ID 的调用，在故障注入使该 GPU 丢失后会报告丢失；只接受类型 ID 的调用会从任何其他声明该类型的 GPU 应答。
 
-**`nvidia-smi pmon` declines a host GPU**, printing `The feature is not
-supported in this configuration` for each one, as it does on a hypervisor.
+**`nvidia-smi pmon` 拒绝宿主机 GPU**，对每块打印 `The feature is not supported in this configuration`，与 hypervisor 上一样。
 
-## Guest
+## 客户机
 
 ```yaml
 device_defaults:
@@ -202,87 +130,60 @@ device_defaults:
         host_driver_branch: "r550_00"
         license:
           product: "NVIDIA Virtual Compute Server"
-          state: "licensed"           # licensed, unlicensed
+          state: "licensed"           # licensed、unlicensed
           expiry: "2027-01-01T00:00:00Z"
 ```
 
-| Field | Default | Meaning |
+| 字段 | 默认值 | 含义 |
 |---|---|---|
-| `host_driver_version` | required | The host's vGPU manager version. At most 10 bytes |
-| `host_driver_branch` | required | The host driver's branch. At most 10 bytes |
-| `license` | absent: unlicensed | The vGPU software license the guest holds |
-| `license.product` | `""` | The licensed product name. At most 127 bytes |
-| `license.state` | `licensed` | `licensed` or `unlicensed` |
-| `license.expiry` | absent: permanent | When a licensed guest's license expires, as an RFC 3339 time |
+| `host_driver_version` | 必需 | 宿主机的 vGPU manager 版本。最多 10 字节 |
+| `host_driver_branch` | 必需 | 宿主机驱动的分支。最多 10 字节 |
+| `license` | 缺失：未获许可 | 客户机持有的 vGPU 软件许可证 |
+| `license.product` | `""` | 获许可的产品名。最多 127 字节 |
+| `license.state` | `licensed` | `licensed` 或 `unlicensed` |
+| `license.expiry` | 缺失：永久 | 已获许可客户机的许可证到期时间，RFC 3339 格式 |
 
-The two host driver fields are limited to 10 bytes because that is the width of
-the fields in the PCI capability that carries them.
+两个宿主机驱动字段限制为 10 字节，因为这是承载它们的 PCI 能力字段的宽度。
 
-What changes for a guest:
+客户机的变化：
 
-- `nvidia-smi -q` prints `Virtualization Mode : VGPU` and a
-  `vGPU Software Licensed Product` section with the product and its
-  `License Status`, such as `Licensed (Expiry: Permanent)`. An unlicensed guest
-  reports the unlicensed state and no expiry.
-- The node agent writes the vGPU vendor capability, holding the host driver
-  version and branch, into each GPU's config space in its
-  [PCI sysfs tree](helm-chart.md#pci-sysfs-in-containers). GPU Feature
-  Discovery (GFD) reads it from there and labels the node
-  `nvidia.com/vgpu.present`, `nvidia.com/vgpu.host-driver-version` and
-  `nvidia.com/vgpu.host-driver-branch`.
+- `nvidia-smi -q` 打印 `Virtualization Mode : VGPU` 和一个 `vGPU Software Licensed Product` 小节，包含产品及其 `License Status`，如 `Licensed (Expiry: Permanent)`。未获许可的客户机报告未获许可状态且没有到期时间。
+- 节点 agent 把 vGPU 厂商能力（包含宿主机驱动版本和分支）写入每块 GPU 在 [PCI sysfs 树](helm-chart.md#pci-sysfs-in-containers)中的配置空间。GPU Feature Discovery（GFD）从那里读取并给节点打上 `nvidia.com/vgpu.present`、`nvidia.com/vgpu.host-driver-version` 和 `nvidia.com/vgpu.host-driver-branch` 标签。
 
-Licensing is reported through `nvmlDeviceGetGridLicensableFeatures` (v4, which
-the unversioned name resolves to); a GPU that is not a guest with a `guest`
-block answers `NVML_ERROR_NOT_SUPPORTED`.
+许可通过 `nvmlDeviceGetGridLicensableFeatures`（v4，无版本名称解析到该版本）报告；没有 `guest` 块的客户机 GPU 则应答 `NVML_ERROR_NOT_SUPPORTED`。
 
-### A guest with no block
+### 没有块的客户机
 
-`mode: vgpu` with no `guest` block reports `Virtualization Mode : VGPU` and
-nothing else: no PCI capability, and licensing answers
-`NVML_ERROR_NOT_SUPPORTED`.
+`mode: vgpu` 但没有 `guest` 块时，只报告 `Virtualization Mode : VGPU`，别无其他：没有 PCI 能力，许可应答 `NVML_ERROR_NOT_SUPPORTED`。
 
-## Validation
+## 校验
 
-The block is checked when the config loads, and each failure names the field:
+配置加载时会检查该块，每次失败都会点出字段：
 
-- `host_vgpu` needs `host_vgpu_mode` set to `sriov` or `non_sriov`, and at
-  least one type.
-- Every type needs a non-zero `id`, a `name` and a non-zero `framebuffer_mib`,
-  with `max_instances` between 1 and 999. No two types share an `id` or a
-  `name`.
-- Every instance names a declared type, and its `count` is not negative.
-- All instances name the same type.
-- The instances' total count does not exceed that type's `max_instances`.
-- When the profile sets `memory.total_bytes`, the instances' total framebuffer
-  does not exceed it.
-- `guest` is refused under `host_vgpu`; `types` and `instances` are refused
-  under `vgpu`.
-- A host runs no GPU in MIG mode: `host_vgpu` is refused when
-  `device_defaults.mig` or any per-device `mig` block sets `mode_current:
-  enabled`, and `nvmlDeviceSetMigMode` refuses to enable MIG on a host with
-  `NVML_ERROR_NOT_SUPPORTED`. A real host with MIG on runs only MIG-backed
-  types, which are not simulated.
-- A `guest` block needs `host_driver_version` and `host_driver_branch`, each at
-  most 10 bytes.
-- `license.state` is `licensed` or `unlicensed`, `license.product` is at most
-  127 bytes, and `license.expiry` parses as RFC 3339.
+- `host_vgpu` 需要 `host_vgpu_mode` 设为 `sriov` 或 `non_sriov`，且至少有一个类型。
+- 每个类型需要非零 `id`、`name` 和非零 `framebuffer_mib`，`max_instances` 在 1 到 999 之间。没有两个类型共享 `id` 或 `name`。
+- 每个实例都命名一个声明过的类型，其 `count` 不为负。
+- 所有实例命名同一类型。
+- 实例总数不超过该类型的 `max_instances`。
+- 当 profile 设置了 `memory.total_bytes` 时，实例总显存不超过它。
+- `guest` 在 `host_vgpu` 下被拒绝；`types` 和 `instances` 在 `vgpu` 下被拒绝。
+- 宿主机不运行任何处于 MIG 模式的 GPU：当 `device_defaults.mig` 或任何逐设备 `mig` 块设置 `mode_current: enabled` 时，`host_vgpu` 被拒绝，`nvmlDeviceSetMigMode` 也拒绝在宿主机上启用 MIG，返回 `NVML_ERROR_NOT_SUPPORTED`。真实宿主机启用 MIG 时只运行 MIG 支撑的类型，而那些没有被模拟。
+- `guest` 块需要 `host_driver_version` 和 `host_driver_branch`，各最多 10 字节。
+- `license.state` 是 `licensed` 或 `unlicensed`，`license.product` 最多 127 字节，`license.expiry` 可按 RFC 3339 解析。
 
-Any other `mode` ignores the `vgpu` block, which is why the `host_vgpu_mode:
-"N/A"` every shipped profile carries loads.
+任何其他 `mode` 都会忽略 `vgpu` 块，这就是每个自带 profile 携带的 `host_vgpu_mode: "N/A"` 仍能加载的原因。
 
-The node agent refuses an invalid block and does not become ready, logging the
-field as a `state source error`. The library rejects the same config and falls
-back to its built-in defaults with a warning.
+节点 agent 拒绝无效的块且不会就绪，把该字段记录为 `state source error`。库同样拒绝该配置，并带警告回退到内置默认值。
 
-!!! note "Not simulated"
-    - The host's mdev and SR-IOV sysfs surfaces.
-    - MIG-backed vGPU types, and so a host with MIG mode on.
-    - Creating or destroying instances at runtime.
-    - Shipped vGPU type catalogues: an install declares its types.
-    - Charging the instances' framebuffer against the physical GPU's memory.
-    - Scheduler, placement and heterogeneous-mode APIs.
-    - `nvmlGetVgpuVersion` and `nvmlSetVgpuVersion`.
-    - vGPU metadata and migration compatibility.
-    - Every `Set*` call.
-    - `nvmlDeviceGetGridLicensableFeatures` v1–v3.
-    - KubeVirt or any other VM manager.
+!!! note "未模拟"
+    - 宿主机的 mdev 和 SR-IOV sysfs 接口面。
+    - MIG 支撑的 vGPU 类型，以及启用 MIG 模式的宿主机。
+    - 运行时创建或销毁实例。
+    - 随附的 vGPU 类型目录：安装要声明自己的类型。
+    - 把实例显存计入物理 GPU 内存。
+    - 调度器、placement 和异构模式 API。
+    - `nvmlGetVgpuVersion` 和 `nvmlSetVgpuVersion`。
+    - vGPU 元数据和迁移兼容性。
+    - 每个 `Set*` 调用。
+    - `nvmlDeviceGetGridLicensableFeatures` v1–v3。
+    - KubeVirt 或任何其他 VM 管理器。

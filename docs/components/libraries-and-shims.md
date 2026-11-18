@@ -1,49 +1,35 @@
-# Libraries and Shims
+# 库与 Shims
 
-An unmodified NVIDIA tool has to be made to see hardware that is not there, and
-there are only two ways to do it: replace the library it loads, or intercept the
-files it reads. Mokka does both, because it can own one and not the other.
+要让未经修改的 NVIDIA 工具看到并不存在的硬件，只有两种办法：替换它加载的库，或拦截它读取的文件。Mokka 两者都做，因为它只能拥有其中之一。
 
-| A tool asks for | Mokka answers with | How |
+| 工具请求的内容 | Mokka 的应答方式 | 手段 |
 |---|---|---|
-| NVML — `nvidia-smi`, DCGM, the device plugin, the DRA driver | the mock `libnvidia-ml.so` | **replacement** |
-| PCI sysfs — `lspci`, topology-aware schedulers | `libmockfs.so` | **interception** |
-| InfiniBand — `ibstat`, `ibv_devinfo`, `iblinkinfo` | the `libibmock*` libraries | **interception** |
-| the `nvidia-imex` binary | `nvidia-imex-shim` | **exec wrapper** |
+| NVML——`nvidia-smi`、DCGM、device plugin、DRA driver | 模拟的 `libnvidia-ml.so` | **替换** |
+| PCI sysfs——`lspci`、拓扑感知调度器 | `libmockfs.so` | **拦截** |
+| InfiniBand——`ibstat`、`ibv_devinfo`、`iblinkinfo` | `libibmock*` 库 | **拦截** |
+| `nvidia-imex` 二进制 | `nvidia-imex-shim` | **exec 包装** |
 
-## Why two mechanisms
+## 为什么需要两种机制
 
-NVML is a library, and a library can simply be replaced: Mokka ships a real
-`libnvidia-ml.so` at the path consumers already load, and owns the whole
-contract. Nothing is forwarded anywhere, because there is nothing behind it.
+NVML 是一个库，而库可以直接替换：Mokka 在消费者已经加载的路径上提供一个真实的 `libnvidia-ml.so`，并拥有整个契约。这里不转发任何调用——其后什么都没有。
 
-`/sys` and `/dev` are not Mokka's to own — they are the kernel's. A fake device
-tree can be staged elsewhere on disk, but `lspci` will still look at
-`/sys/bus/pci`. So those tools get their *lookups* rewritten instead, and read
-the staged tree at the paths they already use.
+`/sys` 和 `/dev` 不属于 Mokka——它们属于内核。假的目录树可以部署在磁盘上的别处，但 `lspci` 仍然会去看 `/sys/bus/pci`。因此 Mokka 改写了这些工具的*查找*行为，让它们在原本使用的路径上读到部署好的目录树。
 
-The practical consequence when debugging: **wrong `nvidia-smi` output points at
-the library; wrong `lspci` or `ibstat` output points at a shim.**
+调试时的实际结论：**`nvidia-smi` 输出错误指向库；`lspci` 或 `ibstat` 输出错误指向 shim。**
 
-For where all of this sits in the wider system, see the
-[architecture overview](../architecture.md).
+这些内容在整个系统中的位置，参见[架构概览](../architecture.md)。
 
-## The mock NVML library
+## 模拟 NVML 库
 
-A real `libnvidia-ml.so` that consumers `dlopen` exactly as they would the
-vendor library — but it reads a YAML profile instead of a driver and a GPU.
+一个真实的 `libnvidia-ml.so`，消费者可以像加载厂商库一样 `dlopen` 它——但它读取的是 YAML profile，而不是驱动和 GPU。
 
-### It runs inside each consumer, not as a service
+### 它在每个消费者内部运行，而不是作为服务
 
-There is no daemon. Every process that loads the library gets its own copy of
-the engine, its own device objects and its own view of the node. Two consumers
-on the same node agree because they read the same configuration, not because
-they talk to anything shared.
+没有守护进程。每个加载该库的进程都拥有自己的引擎副本、自己的设备对象和自己的节点视图。同一节点上的两个消费者之所以保持一致，是因为它们读取同一份配置，而不是因为它们与某个共享对象通信。
 
-That single fact explains most of the component's behaviour — including why
-runtime changes are delivered as a file rather than a command.
+这一事实解释了该组件的大部分行为——包括为什么运行时变更以文件而非命令的形式交付。
 
-### How a call is answered
+### 调用如何被应答
 
 ```mermaid
 flowchart LR
@@ -53,179 +39,123 @@ flowchart LR
     yaml[(profile YAML)] --> engine
 ```
 
-A consumer calls a C symbol. The bridge converts arguments across the CGo
-boundary and resolves the opaque device handle to a Go object. That object
-answers from configuration, and the value travels back out the same way,
-converted to C types at the bridge.
+消费者调用一个 C 符号。桥接层跨越 CGo 边界转换参数，并把不透明的设备句柄解析为 Go 对象。该对象根据配置应答，返回值沿原路返回，在桥接层转换为 C 类型。
 
-Handles are opaque pointers, valid from `nvmlInit` until the matching
-`nvmlShutdown`. Initialisation is reference-counted, so a consumer that
-initialises twice must shut down twice. On the final shutdown handles are
-invalidated and their addresses are never reused — a stale handle is rejected
-rather than silently resolving to a different device.
+句柄是不透明指针，从 `nvmlInit` 到对应的 `nvmlShutdown` 期间有效。初始化是引用计数的，因此初始化两次的消费者必须关闭两次。最后一次关闭时句柄失效，其地址永不复用——陈旧句柄会被拒绝，而不是静默解析到另一台设备。
 
-The library is safe to use from multiple threads.
+该库可安全地被多线程使用。
 
-### What decides the answer
+### 什么决定应答
 
-Two inputs, merged in a fixed order:
+两项输入，按固定顺序合并：
 
-| Input | Changes | Scope |
+| 输入 | 何时变化 | 范围 |
 |---|---|---|
-| The GPU profile | At install or `helm upgrade` | The node's static identity: model, count, memory, topology |
-| Runtime overrides | At any time, without a restart | Health and telemetry: temperature, power, utilisation, clocks, ECC state, failure modes |
+| GPU profile | 安装或 `helm upgrade` 时 | 节点的静态身份：型号、数量、显存、拓扑 |
+| 运行时覆盖 | 随时，无需重启 | 健康与遥测：温度、功耗、利用率、时钟、ECC 状态、故障模式 |
 
-Because the library is per-process, an override cannot be pushed to it. It is
-written to a file beside the profile instead, and every loaded copy re-reads
-that file on a short TTL and merges it over the base. Running and newly started
-processes converge within one interval, and the profile itself is never mutated.
-See [Runtime Control](../nvml-mock-ctl.md).
+因为库是逐进程的，Mokka 无法把覆盖直接推送给它。覆盖写在 profile 旁边的一个文件中，每个已加载的副本按较短 TTL 重新读取，并合并到基础配置之上。运行中的和新启动的进程在一个间隔内收敛，profile 本身从不改动。参见[运行时控制](../nvml-mock-ctl.md)。
 
-### Implemented versus stubbed
+### 已实现与桩
 
-NVML is large, and not every function has a hand-written implementation. Those
-that do not still **export a symbol** and return `NVML_ERROR_NOT_SUPPORTED`.
+NVML 很大，并非每个函数都有手写实现。那些没有实现的函数仍然**导出符号**并返回 `NVML_ERROR_NOT_SUPPORTED`。
 
-This matters more than it sounds. A consumer that probes for a function gets a
-truthful "not supported" and takes its fallback path — the same thing it would
-do against an older real driver. A missing symbol would instead fail the dynamic
-link and crash the consumer at load.
+这比听起来更重要。探测某个函数是否存在的消费者会得到诚实的"不支持"并走回退路径——与它面对较旧的真实驱动时的做法一样。缺少符号则会导致动态链接失败，消费者在加载时崩溃。
 
-For the current split:
+查看当前比例：
 
 ```bash
 go run ./cmd/generate-bridge -input $GO_NVML_DIR/pkg/nvml/nvml.go --stats
 ```
 
-The stub layer is generated from NVML's own header, so adding a hand-written
-implementation removes its stub automatically. See the
-[contributing guide](../contributing/index.md) for that workflow.
+桩层由 NVML 自身的头文件生成，因此添加手写实现会自动移除其桩。该工作流参见[贡献指南](../contributing/index.md)。
 
-### Limits
+### 限制
 
-The library answers management calls. It has no data path: nothing computes, and
-no memory is allocated on a device that does not exist. Anything that needs a
-real GPU to *do work* rather than *report state* is out of scope.
+该库应答管理类调用。它没有数据通路：什么都不计算，也不会在不存在的设备上分配内存。任何需要真实 GPU 去*做工作*而非*报告状态*的事情都超出范围。
 
-CUDA simulation on CPU is not supported as of now. For the other surfaces Mokka
-does not simulate, see
-[what is not simulated yet](../faq.md#what-is-not-simulated-yet).
+目前不支持在 CPU 上模拟 CUDA。Mokka 不模拟的其他接口面，参见[尚未模拟的内容](../faq.md#what-is-not-simulated-yet)。
 
-## The shims
+## Shims
 
-### When a shim works, and when it does not
+### shim 何时有效，何时无效
 
-Two shims are `LD_PRELOAD` libraries. They interpose on the libc wrappers a
-program calls to touch the filesystem — `open`, `stat`, `readlink`, `opendir`
-and friends — and splice a prefix onto any path that matches.
+两个 shim 是 `LD_PRELOAD` 库。它们拦截程序用于访问文件系统的 libc 包装函数——`open`、`stat`、`readlink`、`opendir` 等——并给匹配的路径拼上一个前缀。
 
-That only works for programs that go through libc.
+这只对通过 libc 的程序有效。
 
-!!! warning "Go binaries bypass `LD_PRELOAD` entirely"
-    Go makes syscalls directly rather than through libc, so a preloaded library
-    is never consulted. Most of the Kubernetes control plane is Go, which is why
-    Mokka also bind-mounts the staged tree at the real paths. The shims serve
-    the C tools; the mounts serve everything else.
+!!! warning "Go 二进制完全绕过 `LD_PRELOAD`"
+    Go 直接发起系统调用而不是通过 libc，因此永远不会查询预加载库。Kubernetes 控制面大部分是 Go，这也是 Mokka 还要把部署好的目录树绑定挂载到真实路径的原因。shim 服务于 C 工具；挂载服务于其他一切。
 
-Both libraries are no-ops unless their environment variable is set, so a process
-that inherits them without the corresponding configuration sees the real host.
+除非设置了相应的环境变量，否则两个库都是空操作，因此继承它们却没有相应配置的进程看到的是真实宿主机。
 
-| Shim | Kind | Makes this work |
+| Shim | 类型 | 让什么生效 |
 |---|---|---|
-| `libmockfs` | `LD_PRELOAD` | `lspci`, topology-aware schedulers and Slurm's `AutoDetect=nvidia` see mock GPUs |
-| `libibmock` | `LD_PRELOAD` | `ibstat`, `ibstatus`, `iblinkinfo`, `ibv_devinfo` see mock InfiniBand HCAs |
-| `nvidia-imex-shim` | `execve` wrapper | `nvidia-imex` starts on a machine with no GPU |
+| `libmockfs` | `LD_PRELOAD` | `lspci`、拓扑感知调度器和 Slurm 的 `AutoDetect=nvidia` 看到模拟 GPU |
+| `libibmock` | `LD_PRELOAD` | `ibstat`、`ibstatus`、`iblinkinfo`、`ibv_devinfo` 看到模拟 InfiniBand HCA |
+| `nvidia-imex-shim` | `execve` 包装器 | `nvidia-imex` 在没有 GPU 的机器上启动 |
 
 ### libmockfs
 
-Builds `libmockfs.so`. Redirects lookups under `/sys/bus/pci`,
-`/sys/devices/pci`, `/sys/module`, `/proc/modules` and `/proc/driver/nvidia`
-into the tree named by `MOCK_PCI_ROOT`, and is a no-op when that variable is
-unset. The two `/proc` paths cannot be bind-mounted, because runc refuses
-mounts inside `/proc`, so `lsmod` and Slurm's GPU autodetection reach the mock
-only through this shim.
+构建 `libmockfs.so`。它把 `/sys/bus/pci`、`/sys/devices/pci`、`/sys/module`、`/proc/modules` 和 `/proc/driver/nvidia` 下的查找重定向到 `MOCK_PCI_ROOT` 指定的目录树，未设置该变量时为空操作。两个 `/proc` 路径无法绑定挂载，因为 runc 拒绝在 `/proc` 内挂载，所以 `lsmod` 和 Slurm 的 GPU 自动检测只能通过这个 shim 到达模拟内容。
 
 ### libibmock
 
-Builds three libraries, which is why the InfiniBand mock can be turned on in
-degrees rather than all at once:
+构建三个库，因此 InfiniBand 模拟可以分程度开启，而不是一次性全开：
 
-| Library | Covers |
+| 库 | 覆盖范围 |
 |---|---|
-| `libibmocksys.so` | sysfs and device-node path redirection |
-| `libibmockumad.so` | the UMAD management interface |
+| `libibmocksys.so` | sysfs 和设备节点路径重定向 |
+| `libibmockumad.so` | UMAD 管理接口 |
 | `libibmockverbs.so` | libibverbs |
 
-`MOCK_IB` selects how much of the fabric is simulated. The chart exposes it as
-`infiniband.mockTier`:
+`MOCK_IB` 选择模拟 fabric 的程度。chart 将其暴露为 `infiniband.mockTier`：
 
-| `MOCK_IB` | Effect |
+| `MOCK_IB` | 效果 |
 |---|---|
-| `full` | Path redirection plus UMAD and verbs, backed by the `mock-ib` daemon |
-| `sysfs` | Path redirection only — tools enumerate devices but cannot open a verbs context |
-| `off`, unset, or unrecognised | Every shim becomes a true no-op and the process sees the real host |
+| `full` | 路径重定向加上 UMAD 和 verbs，由 `mock-ib` 守护进程支撑 |
+| `sysfs` | 仅路径重定向——工具能枚举设备，但无法打开 verbs context |
+| `off`、未设置或无法识别 | 所有 shim 都成为真正的空操作，进程看到真实宿主机 |
 
-Matching is case-insensitive, and there is no separate disable flag: leaving
-`MOCK_IB` unset is how you turn the shims off. Redirection targets
-`MOCK_IB_ROOT`, which the chart points at `/var/lib/nvml-mock/ib`.
+匹配不区分大小写，没有单独的禁用 flag：不设置 `MOCK_IB` 就是关闭 shim 的方式。重定向目标是 `MOCK_IB_ROOT`，chart 将其指向 `/var/lib/nvml-mock/ib`。
 
-The libraries target glibc 2.36 and later. Older `__xstat`-family symbols are
-also intercepted so the shim still behaves on earlier libc versions.
+这些库面向 glibc 2.36 及更高版本。较旧的 `__xstat` 系列符号也会被拦截，使 shim 在更早的 libc 版本上仍然有效。
 
 ### nvidia-imex-shim
 
-Not an `LD_PRELOAD` library — a small Go program in the nvml-mock image. On
-multi-node NVLink profiles, such as `gb200`, the
-[node daemon](node-daemon.md) stages it as `usr/bin/nvidia-imex` in the mock
-driver tree, beside NVIDIA's daemon, which it stages as `nvidia-imex.real`
-from the pinned IMEX archive. The NVIDIA DRA driver finds `nvidia-imex` there
-as on a real node and mounts it into its ComputeDomain daemon, and the
-[NRI plugin](nri-plugin.md) adds `nvidia-imex.real` beside it.
+它不是 `LD_PRELOAD` 库，而是 nvml-mock 镜像中的一个小型 Go 程序。在多节点 NVLink profile（如 `gb200`）上，[节点守护进程](node-daemon.md)把它作为 `usr/bin/nvidia-imex` 部署到模拟驱动树中，与 NVIDIA 的守护进程并列——后者从固定版本的 IMEX 归档中部署为 `nvidia-imex.real`。NVIDIA DRA driver 像在真实节点上一样在那里找到 `nvidia-imex` 并挂载进它的 ComputeDomain daemon，[NRI 插件](nri-plugin.md)则把 `nvidia-imex.real` 加在旁边。
 
-The upstream compute-domain daemon hard-codes its command line with no flag
-passthrough, so `--nogpu` cannot be injected from outside. The shim appends it
-and `exec`s `nvidia-imex.real` from its own directory, preserving arguments,
-environment and stdio. Because it `exec`s rather than forks, no wrapper process
-lingers and signals reach the daemon directly. The real daemon then runs in NO
-GPU mode and speaks the real IMEX protocol with its peers. See the
-[ComputeDomain guide](../guides/compute-domain/README.md#providing-imex) for how
-IMEX gets onto a node.
+上游 compute-domain daemon 把命令行硬编码，没有 flag 透传，因此无法从外部注入 `--nogpu`。该 shim 会追加它，并 `exec` 自身目录下的 `nvidia-imex.real`，保留参数、环境和 stdio。因为它用 `exec` 而不是 fork，不会有包装进程滞留，信号直接到达守护进程。真正的守护进程随后以 NO GPU 模式运行，并与对等端使用真实的 IMEX 协议通信。IMEX 如何进入节点，参见 [ComputeDomain 指南](../guides/compute-domain/README.md#providing-imex)。
 
-This one is meant to disappear: it exists only until upstream supports passing
-extra arguments ([#304](https://github.com/NVIDIA/k8s-test-infra/issues/304)).
+这个组件注定会消失：它只存在到上游支持传递额外参数为止（[#304](https://github.com/NVIDIA/k8s-test-infra/issues/304)）。
 
-### How they reach a process
+### 它们如何进入进程
 
-The chart preloads all four libraries on the node daemon, most specific first:
+chart 在节点守护进程上预加载全部四个库，最具体的在前：
 
 ```text
 LD_PRELOAD=/usr/local/lib/libibmockumad.so.1:/usr/local/lib/libibmockverbs.so.1:\
 /usr/local/lib/libibmocksys.so.1:/usr/local/lib/libmockfs.so.1
 ```
 
-Workload containers receive them through the same CDI injection that delivers
-the rest of the mock, so a container that gets mock GPUs also gets the shims
-that make the C tools agree with them.
+工作负载容器通过交付模拟内容其余部分的同一套 CDI 注入接收它们，因此获得模拟 GPU 的容器也会获得让 C 工具与之保持一致的 shim。
 
-### Building and testing
+### 构建与测试
 
 ```bash
-make mockfs-shim     # build libmockfs.so
-make test-mockfs     # integration tests against real C test binaries
+make mockfs-shim     # 构建 libmockfs.so
+make test-mockfs     # 用真实 C 测试二进制进行集成测试
 ```
 
-`libmockfs` ships test binaries under `testbin/` that exercise the fortified
-`open` and `fopen` variants, because glibc's `_FORTIFY_SOURCE` rewrites those
-call sites and a shim that only hooks the plain symbols would silently miss
-them.
+`libmockfs` 在 `testbin/` 下附带测试二进制，用于验证强化版 `open` 和 `fopen` 变体，因为 glibc 的 `_FORTIFY_SOURCE` 会重写这些调用点，只 hook 普通符号的 shim 会静默漏掉它们。
 
-## Related
+## 相关链接
 
-| To read about | See |
+| 想了解 | 参见 |
 |---|---|
-| How the whole system fits together | [Architecture](../architecture.md) |
-| What stages all of this onto a node | [Node Daemon](node-daemon.md) |
-| Every profile knob | [Configuration](../configuration.md) |
-| Changing state at runtime | [Runtime Control](../nvml-mock-ctl.md) |
-| Turning InfiniBand mocking on and off | [Installation](../helm-chart.md#infiniband-mocking) |
-| Adding NVML functions or profiles | [Contributing](../contributing/index.md) |
+| 整个系统如何组合 | [架构](../architecture.md) |
+| 把这一切部署到节点上的是什么 | [节点守护进程](node-daemon.md) |
+| 每个 profile 配置项 | [配置参考](../configuration.md) |
+| 运行时修改状态 | [运行时控制](../nvml-mock-ctl.md) |
+| 开关 InfiniBand 模拟 | [安装](../helm-chart.md#infiniband-mocking) |
+| 添加 NVML 函数或 profile | [贡献指南](../contributing/index.md) |

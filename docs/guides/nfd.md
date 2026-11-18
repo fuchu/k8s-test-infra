@@ -3,29 +3,21 @@
 
 # Node Feature Discovery
 
-Install [Node Feature Discovery (NFD)](https://kubernetes-sigs.github.io/node-feature-discovery/)
-next to Mokka and verify that NFD turns Mokka's feature file into the same
-GPU-presence label that a real node would expose.
+在 Mokka 旁边安装 [Node Feature Discovery（NFD）](https://kubernetes-sigs.github.io/node-feature-discovery/)，验证 NFD 会把 Mokka 的 feature 文件转换为真实节点会暴露的那种 GPU 存在标签。
 
-Mokka does not write Kubernetes node labels. Its node agent writes
-`pci-10de.present=true` to the NFD local-source directory, and NFD owns the
-resulting `feature.node.kubernetes.io/pci-10de.present=true` label. This keeps
-the simulated path aligned with a real deployment.
+Mokka 不写 Kubernetes 节点标签。它的节点 agent 会向 NFD local-source 目录写入 `pci-10de.present=true`，最终产生的 `feature.node.kubernetes.io/pci-10de.present=true` 标签则由 NFD 拥有。这让模拟路径与真实部署保持一致。
 
-## Prerequisites
+## 前置条件
 
-- [Docker](https://docs.docker.com/get-started/get-docker/) and
-  [Kind](https://kind.sigs.k8s.io/)
-- [Helm 3.8 or newer](https://helm.sh/docs/intro/install/)
+- [Docker](https://docs.docker.com/get-started/get-docker/) 和 [Kind](https://kind.sigs.k8s.io/)
+- [Helm 3.8 或更新版本](https://helm.sh/docs/intro/install/)
 - [kubectl](https://kubernetes.io/docs/reference/kubectl/)
 
-This guide takes about 10 minutes and does not require a GPU.
+本指南约需 10 分钟，不需要 GPU。
 
-## Step 1 — Create a cluster and install Mokka
+## 第 1 步——创建集群并安装 Mokka
 
-Kind's default cluster contains only a control-plane node. That node may be
-tainted `NoSchedule`, so the NFD worker would never run there. Create one
-worker explicitly for this guide:
+Kind 默认集群只包含控制面节点。该节点可能带有 `NoSchedule` taint，因此 NFD worker 永远不会在那里运行。为本指南显式创建一个 worker：
 
 ```console
 $ cat > mokka-nfd-kind.yaml <<'EOF'
@@ -43,14 +35,11 @@ $ kubectl label node --all mokka.nvidia.com/type=sgpu
 $ rm mokka-nfd-kind.yaml
 ```
 
-The chart's default `nodeLabels.featuresDir` is
-`/etc/kubernetes/node-feature-discovery/features.d`. It is mounted from each
-node so that NFD can read the file after the node agent writes it.
+chart 默认的 `nodeLabels.featuresDir` 是 `/etc/kubernetes/node-feature-discovery/features.d`。该目录从每个节点挂载，节点 agent 写入文件后 NFD 即可读取。
 
-## Step 2 — Install NFD
+## 第 2 步——安装 NFD
 
-The repository's NFD end-to-end scenario is pinned to version `0.19.0`. Use the
-same version here so the local-source behavior is reproducible:
+仓库中的 NFD 端到端场景固定使用 `0.19.0` 版本。这里使用相同版本以保证 local-source 行为可复现：
 
 ```console
 $ helm repo add nfd https://kubernetes-sigs.github.io/node-feature-discovery/charts
@@ -61,7 +50,7 @@ $ helm upgrade --install nfd nfd/node-feature-discovery \
     --wait --timeout 120s
 ```
 
-Wait for NFD to become ready before checking the label:
+检查标签前先等待 NFD 就绪：
 
 ```console
 $ kubectl -n node-feature-discovery wait \
@@ -70,17 +59,16 @@ $ kubectl -n node-feature-discovery wait \
     --timeout=120s
 ```
 
-## Step 3 — Verify the label and its provenance
+## 第 3 步——验证标签及其来源
 
-NFD polls the local-source directory on every node its worker runs on and adds
-the namespaced label where the feature file exists:
+NFD 会在其 worker 运行的每个节点上轮询 local-source 目录，并在 feature 文件存在的地方加上带命名空间的标签：
 
 ```console
 $ kubectl get nodes \
     -o custom-columns='NODE:.metadata.name,NFD_GPU:.metadata.labels.feature\.node\.kubernetes\.io/pci-10de\.present'
 ```
 
-The worker reports `true`:
+worker 报告 `true`：
 
 ```text
 NODE                      NFD_GPU
@@ -88,41 +76,33 @@ mokka-nfd-control-plane   <none>
 mokka-nfd-worker          true
 ```
 
-The control plane stays unlabelled. Mokka writes the feature file there too,
-but the NFD worker does not tolerate the control-plane taint, so nothing reads
-the file on that node.
+控制面保持无标签。Mokka 也会在那里写 feature 文件，但 NFD worker 不容忍控制面 taint，因此该节点上的文件无人读取。
 
-The input is a feature file, not a label written by Mokka. You can inspect it
-from the node-agent container:
+输入是 feature 文件，而不是 Mokka 写的标签。可以从 node-agent 容器中查看它：
 
 ```console
 $ kubectl -n mokka exec daemonset/nvml-mock -c node-agent -- \
     cat /host/etc/kubernetes/node-feature-discovery/features.d/nvml-mock.features
 ```
 
-Expected output:
+预期输出：
 
 ```text
 pci-10de.present=true
 ```
 
-NFD records labels that it owns in the
-`nfd.node.kubernetes.io/feature-labels` node annotation. Check that annotation
-when a workload or admission rule needs to distinguish NFD-owned labels from
-labels written by another component:
+NFD 把自己拥有的标签记录在 `nfd.node.kubernetes.io/feature-labels` 节点注解中。当工作负载或准入规则需要区分 NFD 拥有的标签与其他组件写入的标签时，请检查该注解：
 
 ```console
 $ kubectl get node mokka-nfd-worker \
     -o jsonpath='{.metadata.annotations.nfd\.node\.kubernetes\.io/feature-labels}{"\n"}'
 ```
 
-The annotation includes `pci-10de.present` without the
-`feature.node.kubernetes.io/` prefix.
+注解中包含不带 `feature.node.kubernetes.io/` 前缀的 `pci-10de.present`。
 
-## Use the label in a workload
+## 在工作负载中使用该标签
 
-Select simulated nodes with the NFD label just as you would select a real GPU
-node, then confirm that Kubernetes scheduled the pod on a labelled node:
+像选择真实 GPU 节点一样，用 NFD 标签选择模拟节点，然后确认 Kubernetes 把 Pod 调度到了带标签的节点上：
 
 ```console
 $ kubectl apply -f - <<'EOF'
@@ -141,31 +121,28 @@ EOF
 $ kubectl get pod nfd-labelled-workload -o wide
 ```
 
-## Troubleshooting
+## 排障
 
-**The label is missing.** Check that the Mokka DaemonSet is ready and that the
-feature file is present in the node-agent container. The NFD chart and Mokka
-must use the same `featureFilesDir` and `nodeLabels.featuresDir` paths.
+**标签缺失。** 检查 Mokka DaemonSet 是否就绪，以及 feature 文件是否存在于 node-agent 容器中。NFD chart 与 Mokka 必须使用相同的 `featureFilesDir` 和 `nodeLabels.featuresDir` 路径。
 
-**The NFD pod is ready but no label appears.** Inspect the NFD worker logs:
+**NFD Pod 就绪但没有标签。** 查看 NFD worker 日志：
 
 ```console
 $ kubectl -n node-feature-discovery logs -l app.kubernetes.io/name=node-feature-discovery
 ```
 
-**The node has a label but the workload is pending.** Confirm that the pod's
-`nodeSelector` uses the complete namespaced key and the string value `"true"`.
+**节点有标签但工作负载处于 Pending。** 确认 Pod 的 `nodeSelector` 使用了完整的带命名空间键和字符串值 `"true"`。
 
-## Clean up
+## 清理
 
 ```console
 $ kind delete cluster --name mokka-nfd
 ```
 
-## Related
+## 相关链接
 
-| To read about | See |
+| 想了解 | 参见 |
 |---|---|
-| Mokka chart values | [Installation](../helm-chart.md) |
-| GPU allocation through the NVIDIA device plugin | [NVIDIA Device Plugin](device-plugin.md) |
-| NFD label behavior in the chart | [Helm chart reference](../helm-chart.md#node-labels) |
+| Mokka chart 取值 | [安装](../helm-chart.md) |
+| 通过 NVIDIA device plugin 分配 GPU | [NVIDIA Device Plugin](device-plugin.md) |
+| chart 中的 NFD 标签行为 | [Helm chart 参考](../helm-chart.md#node-labels) |
