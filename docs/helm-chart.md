@@ -36,6 +36,16 @@ helm install nvml-mock oci://ghcr.io/nvidia/k8s-test-infra/chart/nvml-mock \
   -n mokka --create-namespace
 ```
 
+国内环境若从 `ghcr.io` 拉取镜像困难，可用 `global.imageRegistry` 统一改从私有仓库拉取：
+
+```bash
+helm install nvml-mock oci://ghcr.io/nvidia/k8s-test-infra/chart/nvml-mock \
+  -n mokka --create-namespace \
+  --set global.imageRegistry=shharbor.heilansc.com/ghcr.io
+```
+
+该设置会应用到 chart 内的所有镜像。以节点 agent 为例，原仓库 `ghcr.io/nvidia/nvml-mock` 会变为 `shharbor.heilansc.com/ghcr.io/nvidia/nvml-mock`；其它镜像同理。镜像需预先同步到私有仓库的对应路径，私有仓库需要认证时还要设置 `global.imagePullSecrets`。其它 chart 的覆盖方式见[国内镜像加速](guides/README.md#domestic-mirror)。
+
 插件总是排除自己的 release 命名空间，因此主 nvml-mock DaemonSet 绝不会被自我注入。不使用 `-n` 安装时，release 命名空间就是 `default`——插件随后渲染 `--excluded-namespaces=default,kube-system`，并跳过初次使用者运行的每一个 Pod。没有任何东西会报告这一点：节点 DaemonSet 是 Ready，`/readyz` 返回 200 因为插件*确实*已注册，被跳过的容器在任何级别都不产生日志。Pod 就是简单地在没有模拟 GPU 的情况下启动。
 
 ## 前置条件
@@ -505,7 +515,7 @@ kubectl describe pod -n mokka <nvml-mock-pod>
 | `gpu.failureInjection.after_calls` | `0` | 在 N 次受保护 NVML 调用后确定性地触发故障（0 = 禁用）。 |
 | `gpu.failureInjection.seed` | `0` | 概率摇号的随机数种子；`0` 使用基于时间的种子。 |
 | `gpu.failureInjection.xid.code` | `0` | 触发后通过 NVML 事件集（`NVML_EVENT_TYPE_XID_CRITICAL_ERROR`）传递的 Xid 错误码。`0` = 无 Xid。 |
-| `global.imageRegistry` | `""` | 拉取所有 chart 镜像的仓库，例如镜像站。替换 `image.repository`、`nri.image.repository` 和 `controlPlane.image.repository` 的仓库主机，因此 `ghcr.io/nvidia/nvml-mock` 变为 `<registry>/nvidia/nvml-mock`。 |
+| `global.imageRegistry` | `""` | 拉取所有 chart 镜像的仓库前缀，例如镜像站。会替换 `image.repository`、`nri.image.repository` 和 `controlPlane.image.repository` 的仓库主机：设为 `shharbor.heilansc.com/ghcr.io` 时，`ghcr.io/nvidia/nvml-mock` 变为 `shharbor.heilansc.com/ghcr.io/nvidia/nvml-mock`。 |
 | `global.imagePullSecrets` | `[]` | 添加到每个 chart Pod（nvml-mock、NRI 和控制面）的拉取密钥，位于 `imagePullSecrets` 之前。每项是一个 Secret 名称或 `{name: <secret>}`。 |
 | `imagePullSecrets` | `[]` | 添加到每个 chart Pod 的拉取密钥，位于 `global.imagePullSecrets` 之后；重复项会被丢弃。条目形式相同。 |
 | `extraObjects` | `[]` | 随 release 一起渲染的额外 Kubernetes 对象，每个都经过 `tpl` 处理，因此可以使用 `{{ .Release.Name }}` 等 chart 取值。可以是列表，也可以是以名称为键的 map，以便分层 values 文件覆盖某项或用 `""` 丢弃它。每项是一个对象或 YAML 字符串。 |

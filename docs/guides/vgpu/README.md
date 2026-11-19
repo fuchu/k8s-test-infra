@@ -37,7 +37,7 @@ kubectl -n mokka exec "$POD" -- nvidia-smi vgpu
 ```
 
 !!! note "国内镜像拉取"
-    若 `ghcr.io` 等镜像源拉取缓慢或超时，可给 `nvml-mock` 加 `--set global.imageRegistry=harbor.heilansc.com/ghcr.io`。具体做法与示例见[国内镜像加速](../README.md#domestic-mirror)。
+    若 `ghcr.io` 等镜像源拉取缓慢或超时，可给 `nvml-mock` 加 `--set global.imageRegistry=shharbor.heilansc.com/ghcr.io`。具体做法与示例见[国内镜像加速](../README.md#domestic-mirror)。
 
 每块 GPU 都会列出自己的两个实例（下面输出只截取 8 块 GPU 中的前两块）：
 

@@ -51,7 +51,7 @@ NVSentinel GPU Health Monitor  ──►  platform-connector  ──►  MongoDB
 全程约 30 分钟；如果本地镜像缓存是空的会更久，因为 GPU Operator、cert-manager 和 NVSentinel 都要拉取。
 
 !!! note "国内镜像拉取"
-    本演示会安装 NVSentinel（`ghcr.io`）、GPU Operator（`helm.ngc.nvidia.com` / `nvcr.io`）和 Percona（`docker.io`）的镜像。若这些镜像源拉取缓慢或超时，可给相关 chart 的镜像加私有仓库前缀（如给 GPU Operator 的各镜像加 `harbor.heilansc.com/nvcr.io` 前缀）。具体做法与示例见[国内镜像加速](../README.md#domestic-mirror)。
+    本演示会安装 NVSentinel（`ghcr.io`）、GPU Operator（`helm.ngc.nvidia.com` / `nvcr.io`）和 Percona（`docker.io`）的镜像。若这些镜像源拉取缓慢或超时，可给相关 chart 的镜像加私有仓库前缀（如给 GPU Operator 的各镜像加 `shharbor.heilansc.com/nvcr.io` 前缀）。具体做法与示例见[国内镜像加速](../README.md#domestic-mirror)。
 
 ## 运行
 

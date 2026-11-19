@@ -190,7 +190,7 @@ kubectl --context "${MOKKA_CONTEXT}" \
 每台 worker 上应该各有一个 Ready 的 Mokka Pod。上面的命令会列出四块 `NVIDIA GB300 NVL` 设备，这说明 Mokka 已在节点上就位：模拟驱动目录、配置、设备节点和 CDI 规格文件都已生成。
 
 !!! note "国内镜像拉取"
-    本指南会从 `ghcr.io`（nvml-mock）和 `nvcr.io`（NVIDIA device plugin）拉取镜像。若这些镜像源拉取缓慢或超时，可给相关 chart 的镜像加私有仓库前缀（如给 `nvml-mock` 加 `--set global.imageRegistry=harbor.heilansc.com/ghcr.io`；device plugin 在 `device-plugin-values.yaml` 里把镜像 repository 改为 `harbor.heilansc.com/nvcr.io/nvidia/k8s-device-plugin`）。具体做法与示例见[国内镜像加速](../README.md#domestic-mirror)。
+    本指南会从 `ghcr.io`（nvml-mock）和 `nvcr.io`（NVIDIA device plugin）拉取镜像。若这些镜像源拉取缓慢或超时，可给相关 chart 的镜像加私有仓库前缀（如给 `nvml-mock` 加 `--set global.imageRegistry=shharbor.heilansc.com/ghcr.io`；device plugin 在 `device-plugin-values.yaml` 里把镜像 repository 改为 `shharbor.heilansc.com/nvcr.io/nvidia/k8s-device-plugin`）。具体做法与示例见[国内镜像加速](../README.md#domestic-mirror)。
 
 只有当所在 worker 的 containerd 把 `nvidia` 作为默认 runtime handler 之后，Mokka Pod 才会变成 Ready；为达到这个状态，Mokka 会重启 worker 上的 containerd 一次。`mokka-values.yaml` 把 containerd 的配置目录（Mokka 配置文件存放处）设为 `/etc/containerd/config.d`。`nodeadm` 每次启动时改写的 `config.toml` 本来就会导入这个目录，因此这套配置不依赖某条会在下次启动时被删掉的 `imports` 条目。
 

@@ -78,7 +78,7 @@ helm install nvml-mock oci://ghcr.io/nvidia/k8s-test-infra/chart/nvml-mock \
 `integrations.fakeGpuOperator.enabled=true` 负责按 FGO 加载器能读懂的格式生成 profile ConfigMap；`targetNamespace` 把它们放到 FGO 会去读的位置——不设的话，ConfigMap 会落在 Mokka 自己的 release 命名空间里，而 FGO 根本不看那里。
 
 !!! note "国内镜像拉取"
-    本指南会从 `ghcr.io`（nvml-mock、fake-gpu-operator）拉取镜像。若这些镜像源拉取缓慢或超时，可给相关 chart 的镜像加私有仓库前缀（如给 `nvml-mock` 加 `--set global.imageRegistry=harbor.heilansc.com/ghcr.io`）。具体做法与示例见[国内镜像加速](../README.md#domestic-mirror)。
+    本指南会从 `ghcr.io`（nvml-mock、fake-gpu-operator）拉取镜像。若这些镜像源拉取缓慢或超时，可给相关 chart 的镜像加私有仓库前缀（如给 `nvml-mock` 加 `--set global.imageRegistry=shharbor.heilansc.com/ghcr.io`）。具体做法与示例见[国内镜像加速](../README.md#domestic-mirror)。
 
 ## 第 3 步 — 在 scale 节点池安装 FGO
 

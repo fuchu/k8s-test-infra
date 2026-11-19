@@ -6,43 +6,47 @@
 
 所有指南都需要 [Helm 3.8 或更高版本](https://helm.sh/docs/intro/install/) 和 [kubectl](https://kubernetes.io/docs/reference/kubectl/)。大多数教程用 [Docker](https://docs.docker.com/get-started/get-docker/) 加 [Kind](https://kind.sigs.k8s.io/) 在本地起一个集群；Amazon EKS 那篇既可以用现成的兼容集群，也可以用 Terraform 新建一个。每篇教程在安装任何东西之前，都会先写清楚目标和前置条件。
 
+国内安装 Helm 时，优先下载 `https://get.helm.sh/helm-<版本>-linux-amd64.tar.gz`；该地址不可达时改用[华为云镜像](https://repo.huaweicloud.com/helm/)。不建议依赖 `get-helm-3` 脚本或 GitHub release 直链，它们在国内常受限。
+
 ## 国内镜像加速 <a id="domestic-mirror"></a>
 
 指南里大部分 `helm install` 都从境外 registry 拉取镜像：`ghcr.io`（Mokka、Slinky、Run:ai FGO）、`helm.ngc.nvidia.com` / `nvcr.io`（GPU Operator、DRA driver、NVIDIA device plugin）、`quay.io`（cert-manager）、`docker.io`（Percona）等。国内直连这些域名常常很慢甚至超时。
 
-如果你的环境里有可用的私有镜像仓库（下文以 `harbor.heilansc.com` 为例，请替换成你自己的域名），可以为 chart 用到的镜像统一加上**仓库前缀**，把原 registry 嵌套到前缀之下。两种常见写法：
+如果你的环境里有可用的私有镜像仓库（下文以 `shharbor.heilansc.com` 为例，请替换成你自己的域名），可以为 chart 用到的镜像统一加上**仓库前缀**，把原 registry 嵌套到前缀之下。两种常见写法：
 
 - **Mokka 的 `nvml-mock` chart（OCI，来自 `ghcr.io`）** 自带 `global.imageRegistry` 开关，直接加前缀即可：
 
   ```bash
   helm install nvml-mock oci://ghcr.io/nvidia/k8s-test-infra/chart/nvml-mock \
     --namespace mokka --create-namespace \
-    --set global.imageRegistry=harbor.heilansc.com/ghcr.io
+    --set global.imageRegistry=shharbor.heilansc.com/ghcr.io
   ```
 
-  渲染后实际镜像为 `harbor.heilansc.com/ghcr.io/nvidia/nvml-mock:<tag>`：chart 会先剥掉原 `image.repository` 里的 `ghcr.io`，再用 `global.imageRegistry` 整体前缀替换。因此镜像在仓库里的路径应为 `ghcr.io/nvidia/nvml-mock`。
+  渲染后实际镜像为 `shharbor.heilansc.com/ghcr.io/nvidia/nvml-mock:<tag>`：chart 会先剥掉原 `image.repository` 里的 `ghcr.io`，再用 `global.imageRegistry` 整体前缀替换。因此镜像在仓库里的路径应为 `ghcr.io/nvidia/nvml-mock`。
 
 - **其它 chart（GPU Operator、cert-manager、Slurm、NVSentinel、device plugin、DRA driver、Topograph 等）**：多数不直接暴露 `global.imageRegistry`，需要显式覆盖镜像的 `image.repository`，把原 registry 拼到前缀之后。例如：
 
   ```bash
   # NVIDIA device plugin（原 registry 为 nvcr.io）
   helm upgrade --install nvidia-device-plugin nvdp/nvidia-device-plugin \
-    --set image.repository=harbor.heilansc.com/nvcr.io/nvidia/k8s-device-plugin
+    --set image.repository=shharbor.heilansc.com/nvcr.io/nvidia/k8s-device-plugin
 
   # DRA driver（原 registry 为 nvcr.io）
   helm install nvidia-dra-driver nvidia/dra-driver-nvidia-gpu \
-    --set image.repository=harbor.heilansc.com/nvcr.io/nvidia/dra-driver-nvidia-gpu
+    --set image.repository=shharbor.heilansc.com/nvcr.io/nvidia/dra-driver-nvidia-gpu
 
   # Node Feature Discovery（原 registry 为 registry.k8s.io）
   helm upgrade --install nfd nfd/node-feature-discovery \
-    --set image.repository=harbor.heilansc.com/registry.k8s.io/nfd/node-feature-discovery
+    --set image.repository=shharbor.heilansc.com/registry.k8s.io/nfd/node-feature-discovery
   ```
 
-  具体覆盖哪个值，取决于各 chart 的 values 结构：有的 chart 所有容器共用同一个 `image` 值（如 NFD、device plugin、DRA driver），覆盖一次即可；有的每个子组件各带一份（如 GPU Operator），需要逐个覆盖或查阅其文档。共同原则是：**把 chart 用到的每个镜像 repository 前面，统一加上 `harbor.heilansc.com/<原registry>`**。
+  具体覆盖哪个值，取决于各 chart 的 values 结构：有的 chart 所有容器共用同一个 `image` 值（如 NFD、device plugin、DRA driver），覆盖一次即可；有的每个子组件各带一份（如 GPU Operator），需要逐个覆盖或查阅其文档。共同原则是：**把 chart 用到的每个镜像 repository 前面，统一加上 `shharbor.heilansc.com/<原registry>`**。
+
+  若私有仓库需要认证，再给对应 chart 配置拉取密钥：Mokka chart 可用 `--set global.imagePullSecrets[0]=<secret>`；其它 chart 按其 values 中的 `imagePullSecrets` 设置。后续 `helm upgrade` 也要重复相同覆盖，或直接写入 values 文件，避免镜像前缀被重置。
 
 !!! tip "Kind 节点上的两点注意"
     1. **节点镜像本身**：`kind create cluster` 默认拉取 `kindest/node`，国内也可能很慢。可以给 Docker 配置 `--registry-mirror`，或用 `kind create cluster --image` 指定国内镜像。
-    2. **kind 节点解析不到私有仓库域名**：宿主机能解析 `harbor.heilansc.com`，但 kind 节点容器默认解析不到，会导致镜像拉取报 `lookup ... connection refused`。持久修复是在 kind 配置里加 `extraHosts`，让节点创建时自动写入：
+    2. **kind 节点解析不到私有仓库域名**：宿主机能解析 `shharbor.heilansc.com`，但 kind 节点容器默认解析不到，会导致镜像拉取报 `lookup ... connection refused`。持久修复是在 kind 配置里加 `extraHosts`，让节点创建时自动写入：
 
     ```yaml
     kind: Cluster
@@ -50,10 +54,10 @@
     nodes:
     - role: control-plane
       extraHosts:
-      - "harbor.heilansc.com:10.1.1.21"   # 10.1.1.21 换成你环境解析到的真实 IP
+      - "shharbor.heilansc.com:10.1.1.21"   # 10.1.1.21 换成你环境解析到的真实 IP
     - role: worker
       extraHosts:
-      - "harbor.heilansc.com:10.1.1.21"
+      - "shharbor.heilansc.com:10.1.1.21"
     ```
 
 ## 场景：让 Mokka 对接真实的 GPU 消费方

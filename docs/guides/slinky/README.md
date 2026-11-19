@@ -56,7 +56,7 @@ helm install nvml-mock oci://ghcr.io/nvidia/k8s-test-infra/chart/nvml-mock \
 NRI 插件默认开启。默认的 `gb300` profile 给每个节点 4 块 GPU，第 5 步的配置依赖这个数量。
 
 !!! note "国内镜像拉取"
-    本指南会从 `ghcr.io`（nvml-mock、cert-manager、Slurm）和 `helm.ngc.nvidia.com` / `nvcr.io`（GPU Operator）拉取镜像。若这些镜像源拉取缓慢或超时，可给相关 chart 的镜像加私有仓库前缀（如给 `nvml-mock` 加 `--set global.imageRegistry=harbor.heilansc.com/ghcr.io`，给 GPU Operator 的各镜像加 `harbor.heilansc.com/nvcr.io` 前缀）。具体做法与示例见[国内镜像加速](../README.md#domestic-mirror)。
+    本指南会从 `ghcr.io`（nvml-mock、cert-manager、Slurm）和 `helm.ngc.nvidia.com` / `nvcr.io`（GPU Operator）拉取镜像。若这些镜像源拉取缓慢或超时，可给相关 chart 的镜像加私有仓库前缀（如给 `nvml-mock` 加 `--set global.imageRegistry=shharbor.heilansc.com/ghcr.io`，给 GPU Operator 的各镜像加 `shharbor.heilansc.com/nvcr.io` 前缀）。具体做法与示例见[国内镜像加速](../README.md#domestic-mirror)。
 
 ## 第 3 步 — 安装 GPU Operator
 

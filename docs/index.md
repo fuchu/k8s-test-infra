@@ -31,6 +31,8 @@ helm install nvml-mock oci://ghcr.io/nvidia/k8s-test-infra/chart/nvml-mock \
     --namespace mokka --create-namespace
 ```
 
+国内环境可加 `--set global.imageRegistry=<私有仓库>/ghcr.io`，把 Mokka 的镜像统一改从私有仓库拉取；镜像需预先同步到对应路径。完整做法见[国内镜像加速](guides/README.md#domestic-mirror)。
+
 现在每个节点都会上报模拟 GPU。[快速开始](quickstart.md)会带你继续往下操作。
 
 ## 各领域的模拟深度

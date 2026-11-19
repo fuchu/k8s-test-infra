@@ -43,6 +43,16 @@ helm install nvml-mock oci://ghcr.io/nvidia/k8s-test-infra/chart/nvml-mock \
     --namespace mokka --create-namespace
 ```
 
+国内环境若从 `ghcr.io` 拉取镜像很慢或超时，可给 Mokka chart 加私有仓库前缀（示例域名请替换）：
+
+```bash
+helm install nvml-mock oci://ghcr.io/nvidia/k8s-test-infra/chart/nvml-mock \
+    --namespace mokka --create-namespace \
+    --set global.imageRegistry=shharbor.heilansc.com/ghcr.io
+```
+
+此时实际拉取的镜像是 `shharbor.heilansc.com/ghcr.io/nvidia/nvml-mock:<tag>`，请先把镜像同步到该路径。其它 chart 的覆盖方式见[国内镜像加速](docs/guides/README.md#domestic-mirror)。
+
 现在每个节点都会报告 4 块模拟的 GB300 GPU。用 `--set gpu.profile=<name>` 换成 `a100`、`b200`、`gb200`、`h100`、`l40s`、`t4` 或 `vrnvl72`。
 
 [按领域的模拟深度](docs/index.md#各领域的模拟深度) 逐层拆解了每个模拟面——GPU 与 NVML、Kubernetes 分配、指标、PCI 与 NUMA、NVLink、NVSwitch 与 Fabric Manager，以及 InfiniBand——分别说明了它们能证明什么、不能证明什么。

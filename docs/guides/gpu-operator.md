@@ -32,6 +32,9 @@ helm install nvml-mock oci://ghcr.io/nvidia/k8s-test-infra/chart/nvml-mock \
   --wait --timeout 120s
 ```
 
+!!! note "国内镜像拉取"
+    国内环境可给 Mokka chart 加 `--set global.imageRegistry=shharbor.heilansc.com/ghcr.io`。GPU Operator 的 operand 各自使用独立的镜像值，需在 `gpu-operator-values.yaml` 中逐个改为 `shharbor.heilansc.com/nvcr.io/...`；完整做法见[国内镜像加速](README.md#domestic-mirror)。
+
 ## 第 3 步——安装 GPU Operator
 
 ```bash

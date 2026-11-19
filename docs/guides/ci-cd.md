@@ -45,6 +45,9 @@ jobs:
 
 `--wait` 是可靠性的关键：没有它，下一步会在 DaemonSet 开始服务之前启动，测试就会在一个尚未上报 GPU 的节点上失败。
 
+!!! note "国内自托管 runner"
+    如果作业跑在国内自托管 runner 上，可给 `helm install` 加 `--set global.imageRegistry=<私有仓库>/ghcr.io`，并把镜像预先同步到对应路径；详见[国内镜像加速](README.md#domestic-mirror)。
+
 ## 固定 chart 版本
 
 没有 `--version` 时，`helm install` 会取最新的稳定 Mokka 版本。测试通过后，加上 `--version` 并指定通过测试的那个版本。不固定 chart 意味着某天你什么都没改，上游发布却改变了 CI 看到的东西，而且失败看起来不像版本变化。

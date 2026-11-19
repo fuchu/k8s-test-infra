@@ -33,7 +33,7 @@ helm install nvml-mock oci://ghcr.io/nvidia/k8s-test-infra/chart/nvml-mock \
 上面是两块板子、每块 7 个切片，所以节点上一共 14 个分区。
 
 !!! note "国内镜像拉取"
-    若 `ghcr.io` 等镜像源拉取缓慢或超时，可给 `nvml-mock` 加 `--set global.imageRegistry=harbor.heilansc.com/ghcr.io`。具体做法与示例见[国内镜像加速](../README.md#domestic-mirror)。
+    若 `ghcr.io` 等镜像源拉取缓慢或超时，可给 `nvml-mock` 加 `--set global.imageRegistry=shharbor.heilansc.com/ghcr.io`。具体做法与示例见[国内镜像加速](../README.md#domestic-mirror)。
 
 用最小的切片把一块板子填满，所有分区就会共用同一个规格名——这正是 device plugin 的 `migStrategy=single` 所要求的：
 

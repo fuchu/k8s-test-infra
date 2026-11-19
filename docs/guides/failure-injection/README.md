@@ -44,7 +44,7 @@ HELM_TIMEOUT=30m ./run.sh
 注意 `ghcr.io/nvidia/nvml-mock:latest` 是浮动标签，集群若缓存了旧的 `:latest`，跑起来的构建版本可能和这份 chart 对不上。需要固定配对时，请用 `NVML_MOCK_IMAGE` 指定一个已发布的版本标签。
 
 !!! note "国内镜像拉取"
-    演示默认从 `ghcr.io/nvidia/nvml-mock:latest` 拉取镜像。若 `ghcr.io` 拉取缓慢或超时，可用 `NVML_MOCK_IMAGE` 指向镜像仓库里带前缀的版本（如 `harbor.heilansc.com/ghcr.io/nvidia/nvml-mock:<tag>`）。具体做法与示例见[国内镜像加速](../README.md#domestic-mirror)。
+    演示默认从 `ghcr.io/nvidia/nvml-mock:latest` 拉取镜像。若 `ghcr.io` 拉取缓慢或超时，可用 `NVML_MOCK_IMAGE` 指向镜像仓库里带前缀的版本（如 `shharbor.heilansc.com/ghcr.io/nvidia/nvml-mock:<tag>`）。具体做法与示例见[国内镜像加速](../README.md#domestic-mirror)。
 
 ## 脚本会做什么
 

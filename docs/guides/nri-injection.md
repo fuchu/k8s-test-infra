@@ -29,6 +29,9 @@ helm install nvml-mock oci://ghcr.io/nvidia/k8s-test-infra/chart/nvml-mock \
   --wait --timeout 180s
 ```
 
+!!! note "国内镜像拉取"
+    国内环境可加 `--set global.imageRegistry=shharbor.heilansc.com/ghcr.io`，把 chart 内所有镜像改从私有仓库拉取；镜像需预先同步到对应路径。其它 chart 的覆盖方式见[国内镜像加速](README.md#domestic-mirror)。
+
 已有的 release 会在下次 `helm upgrade` 时开启 NRI。从 0.4.x chart 升级时不要使用 `--reuse-values`，它会渲染该 release 的取值，包括 `nri.enabled=false` 及其镜像 tag。`--reset-then-reuse-values`（Helm 3.14+）则会保留你自己的覆盖值。
 
 每个节点 Pod 都会在节点 agent 旁运行 NRI 插件，且只有插件向 containerd 注册后才变为 Ready：

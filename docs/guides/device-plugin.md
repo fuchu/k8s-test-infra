@@ -22,6 +22,9 @@ helm install nvml-mock oci://ghcr.io/nvidia/k8s-test-infra/chart/nvml-mock \
   --wait --timeout 120s
 ```
 
+!!! note "国内镜像拉取"
+    国内环境可给 Mokka chart 加 `--set global.imageRegistry=shharbor.heilansc.com/ghcr.io`；第 3 步清单里的 device plugin 镜像也应改成 `shharbor.heilansc.com/nvcr.io/nvidia/k8s-device-plugin:v0.18.2`。镜像需预先同步到私有仓库的对应路径，完整做法见[国内镜像加速](README.md#domestic-mirror)。
+
 ## 第 2 步——给节点打标签
 
 下面的 device plugin 清单针对模拟 GPU 节点池，因此节点必须带有该标签：

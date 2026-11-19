@@ -59,7 +59,7 @@ helm install nvml-mock oci://ghcr.io/nvidia/k8s-test-infra/chart/nvml-mock \
 `kubectl -n mokka get pods -o wide` 应该能看到每个节点上都跑着一个 `nvml-mock` Pod，NRI 插件就在其中，容器名为 `nvml-mock-nri`。
 
 !!! note "国内镜像拉取"
-    本指南会从 `ghcr.io`（nvml-mock）、`helm.ngc.nvidia.com` / `nvcr.io`（GPU Operator、Dynamo 平台）拉取镜像。若这些镜像源拉取缓慢或超时，可给相关 chart 的镜像加私有仓库前缀（如给 `nvml-mock` 加 `--set global.imageRegistry=harbor.heilansc.com/ghcr.io`）。具体做法与示例见[国内镜像加速](../README.md#domestic-mirror)。
+    本指南会从 `ghcr.io`（nvml-mock）、`helm.ngc.nvidia.com` / `nvcr.io`（GPU Operator、Dynamo 平台）拉取镜像。若这些镜像源拉取缓慢或超时，可给相关 chart 的镜像加私有仓库前缀（如给 `nvml-mock` 加 `--set global.imageRegistry=shharbor.heilansc.com/ghcr.io`）。具体做法与示例见[国内镜像加速](../README.md#domestic-mirror)。
 
 `excludedNamespaces` 用来让插件避开 GPU Operator 的 Pod，后者和 [GPU Operator 指南](../gpu-operator.md) 里一样，不需要这个插件。在 0.4.x 版本上，如果不加这项，插件会把 operator 的 validator 也注入一遍。每次 validator 启动都会在节点上再多叠一层挂载；参见 [启用 NRI 后节点上的挂载会不断累积](../../troubleshooting.md#mounts-pile-up-on-a-node-with-nri-enabled)。
 

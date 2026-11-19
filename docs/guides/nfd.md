@@ -50,6 +50,9 @@ $ helm upgrade --install nfd nfd/node-feature-discovery \
     --wait --timeout 120s
 ```
 
+!!! note "国内镜像拉取"
+    国内环境可给 Mokka chart 加 `--set global.imageRegistry=shharbor.heilansc.com/ghcr.io`；给 NFD 加 `--set image.repository=shharbor.heilansc.com/registry.k8s.io/nfd/node-feature-discovery --set image.tag=v0.19.0`。镜像需预先同步到私有仓库的对应路径，完整做法见[国内镜像加速](README.md#domestic-mirror)。
+
 检查标签前先等待 NFD 就绪：
 
 ```console

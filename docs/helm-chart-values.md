@@ -57,7 +57,7 @@ Kubernetes：`>= 1.28.0-0`
 | fabricmanager.stateDir | string | `"/var/lib/nvml-mock/fabric-state"` | fabric-manager 就绪状态的宿主机目录。 |
 | featureGates | object | `{}` |  |
 | global.imagePullSecrets | list | `[]` | 添加到本 chart 创建的所有 Pod 的拉取密钥。 |
-| global.imageRegistry | string | `""` | 应用于所有镜像的仓库主机覆盖，如内部镜像仓库。 |
+| global.imageRegistry | string | `""` | 应用于所有镜像的仓库前缀覆盖，如内部镜像仓库。会替换原 repository 的主机部分：`ghcr.io/nvidia/nvml-mock` 在设为 `shharbor.heilansc.com/ghcr.io` 后变为 `shharbor.heilansc.com/ghcr.io/nvidia/nvml-mock`。 |
 | gpu.count | string | `""` | 模拟 GPU 数量；空则从所选 profile 推导。 |
 | gpu.customConfig | string | `""` | 替换所选 GPU profile 的完整 YAML 配置。 |
 | gpu.dynamicMetrics.enabled | bool | `false` | 启用随时间变化的合成温度、功耗和利用率数值。 |

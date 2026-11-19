@@ -4,7 +4,7 @@
 
 ## 前置条件
 
-- [Helm 3.8 或更高版本](https://helm.sh/docs/intro/install/)——chart 从 OCI 仓库提供。
+- [Helm 3.8 或更高版本](https://helm.sh/docs/intro/install/)——chart 从 OCI 仓库提供。国内安装二进制时优先用 `https://get.helm.sh/helm-<版本>-linux-amd64.tar.gz`，备用[华为云镜像](https://repo.huaweicloud.com/helm/)；`get-helm-3` 脚本和 GitHub release 直链在国内常受限。
 - [kubectl](https://kubernetes.io/docs/reference/kubectl/)，指向你要使用的集群。
 - Docker 和 [Kind](https://kind.sigs.k8s.io/)——仅当你需要一个临时的本地集群时才需要。
 
@@ -22,6 +22,20 @@ helm install nvml-mock \
 已经有集群？跳过 `kind` 那一行即可。chart 会自行准备每个节点的 containerd，因此只要节点在 systemd 下运行 containerd 1.7 或更高版本，任何集群都可以；托管集群可参见 [Amazon EKS 指南](guides/install/aws/eks/README.md)。
 
 在默认的 `gb300` profile 下，每个节点还会从 `developer.download.nvidia.com` 下载 NVIDIA 的 IMEX 归档包，用于 DRA ComputeDomain。无法访问该地址的节点仍可在没有 IMEX 的情况下工作；添加 `--set featureGates.IMEXDownload=false` 可跳过下载。
+
+### 国内环境镜像加速
+
+国内直连 `ghcr.io` 较慢时，给 `nvml-mock` chart 设置 `global.imageRegistry`：
+
+```bash
+helm install nvml-mock oci://ghcr.io/nvidia/k8s-test-infra/chart/nvml-mock \
+    --namespace mokka --create-namespace \
+    --set global.imageRegistry=shharbor.heilansc.com/ghcr.io
+```
+
+chart 会剥掉原 repository 的 `ghcr.io`，最终拉取 `shharbor.heilansc.com/ghcr.io/nvidia/nvml-mock:<tag>`。请把镜像预先同步到该路径；后续 `helm upgrade` 也要带上相同的覆盖，或写入 values 文件。私有仓库需要认证时，可加 `--set global.imagePullSecrets[0]=<secret>`。
+
+其它 chart（DRA driver、NFD、GPU Operator 等）通常需要覆盖 `image.repository`；kind 节点还要能解析私有仓库域名。完整示例见[国内镜像加速](guides/README.md#domestic-mirror)。
 
 ## 验证
 

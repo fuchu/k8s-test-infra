@@ -64,6 +64,9 @@ helm install nvidia-dra-driver nvidia/dra-driver-nvidia-gpu \
   --wait --timeout 180s
 ```
 
+!!! note "国内镜像拉取"
+    国内环境可给 Mokka chart 加 `--set global.imageRegistry=shharbor.heilansc.com/ghcr.io`；给 DRA driver 覆盖 `--set image.repository=shharbor.heilansc.com/nvcr.io/nvidia/dra-driver-nvidia-gpu`。镜像需预先同步到私有仓库的对应路径，完整做法见[国内镜像加速](README.md#domestic-mirror)。
+
 | 设置 | 原因 |
 |---|---|
 | `nvidiaDriverRoot` | 把 driver 指向 Mokka 部署好的目录树，而不是真实驱动根目录 |

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 global:
-  # -- Registry host override applied to every image, such as an internal mirror.
+  # -- Registry prefix applied to every image; replaces the host of the original repository (for example ghcr.io/nvidia/nvml-mock becomes <prefix>/nvidia/nvml-mock).
   imageRegistry: ""
   # -- Pull secrets added to every pod created by this chart.
   imagePullSecrets: []

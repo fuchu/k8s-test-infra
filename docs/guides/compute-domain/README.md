@@ -171,7 +171,7 @@ helm upgrade --install nvidia-dra-driver nvidia/dra-driver-nvidia-gpu \
 ```
 
 !!! note "国内镜像拉取"
-    DRA driver 的镜像来自 `helm.ngc.nvidia.com` / `nvcr.io`。若拉取缓慢或超时，可给它加私有仓库前缀：`--set image.repository=harbor.heilansc.com/nvcr.io/nvidia/dra-driver-nvidia-gpu`（其它 chart 同理）。具体做法与示例见[国内镜像加速](../README.md#domestic-mirror)。
+    DRA driver 的镜像来自 `helm.ngc.nvidia.com` / `nvcr.io`。若拉取缓慢或超时，可给它加私有仓库前缀：`--set image.repository=shharbor.heilansc.com/nvcr.io/nvidia/dra-driver-nvidia-gpu`（其它 chart 同理）。具体做法与示例见[国内镜像加速](../README.md#domestic-mirror)。
 
 | `dra-driver.values.yaml` 中的设置 | 原因 |
 |---|---|
